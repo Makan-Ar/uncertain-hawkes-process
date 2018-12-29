@@ -1,20 +1,38 @@
 import numpy as np
+import matplotlib.pyplot as plt
 
 
 class HighSchoolData:
     network_data_path = "data/HighSchoolContactFriendships2013/High-School_data_2013.csv"
     preprocessed_network_data_path = "data/HighSchoolContactFriendships2013/preprocessed-High-School_data_2013.txt"
+    diaries_data_path = 'data/HighSchoolContactFriendships2013/Contact-diaries-network_data_2013.csv'
     start_time = 1385982020
     end_time = 1386345580
     interaction_duration = 20
-    network_data = None
-    preprocessed_network_data = None
+    network_data = None  # raw high school data
+    preprocessed_network_data = None  # data in form of student1_id, student2_id, interaction_start_time, duration
+    diaries_data_self_reported = None  # diary data keyed by the person who reported
+    diaries_data_peer_reported = None  # diary data keyed by the person who was reported
     __student_ids = None
 
-    def __init__(self, preprocessed=False):
+    def __init__(self, preprocessed=True):
         self.network_data = np.genfromtxt(self.network_data_path, dtype=int, usecols=(0, 1, 2))
+        self.get_diaries_data()
         if preprocessed:
             self.preprocessed_network_data = np.genfromtxt(self.preprocessed_network_data_path, dtype=int)
+
+    def get_diaries_data(self):
+        raw_diaries_data = np.genfromtxt(self.diaries_data_path, dtype=int)
+        self.diaries_data_self_reported = {}
+        self.diaries_data_peer_reported = {}
+        for i in range(np.shape(raw_diaries_data)[0]):
+            if raw_diaries_data[i, 0] not in self.diaries_data_self_reported:
+                self.diaries_data_self_reported[raw_diaries_data[i, 0]] = {}
+            self.diaries_data_self_reported[raw_diaries_data[i, 0]][raw_diaries_data[i, 1]] = raw_diaries_data[i, 2]
+
+            if raw_diaries_data[i, 1] not in self.diaries_data_peer_reported:
+                self.diaries_data_peer_reported[raw_diaries_data[i, 1]] = {}
+            self.diaries_data_peer_reported[raw_diaries_data[i, 1]][raw_diaries_data[i, 0]] = raw_diaries_data[i, 2]
 
     def get_student_ids(self):
         if self.__student_ids is None:
@@ -77,10 +95,60 @@ class HighSchoolData:
             self.run_preprocessing()
         return self.preprocessed_network_data[np.where(self.preprocessed_network_data[:, 0:2] == student_id)[0]]
 
+    def plot_student_interactions(self, student_id, based_on_self_reported_diary_only=False):
+        interactions = self.get_student_preprocessed_interactions(student_id)
+        is_validated = self.is_interaction_in_diary(interactions, based_on_self_reported_diary_only, student_id)
+
+        validated_interactions = np.where(is_validated == True)[0]
+        plt.scatter(interactions[validated_interactions, 2], interactions[validated_interactions, 3], c='blue',
+                    label="Validated Interactions")
+
+        proximity_interactions = np.where(is_validated == False)[0]
+        plt.scatter(interactions[proximity_interactions, 2], interactions[proximity_interactions, 3], c='red',
+                    label="Proximity Only Interactions")
+        plt.legend()
+        plt.title("Student ID: {}".format(student_id))
+        plt.xlabel("Time (s)")
+        plt.ylabel("Length of Interaction (s)")
+        plt.show()
+
+    def is_interaction_in_diary(self, interactions, based_on_self_reported_diary_only=False, student_id=None):
+        """
+        Check if the interaction is in the diary.
+        :param interactions: must be a list in the same format as preprocessed_network_data or a single row
+        :param based_on_self_reported_diary_only: if true, only looks for the interaction in self reported
+        :param student_id: must be passed if `based_on_self_reported_diary_only` is True
+        :return: boolean or a list of boolean
+        """
+        if based_on_self_reported_diary_only and student_id is None:
+            exit("Cannot check for self reported diary without student id")
+
+        return_list = True
+        valid_interactions = []
+        if len(np.shape(interactions)) == 1:
+            interactions = [interactions]
+            return_list = False
+
+        for i in range(np.shape(interactions)[0]):
+            if based_on_self_reported_diary_only:
+                sid = interactions[i, 0] if interactions[i, 0] != student_id else interactions[i, 1]
+                valid_interactions.append(sid in self.diaries_data_self_reported[student_id])
+            else:
+                is_valid = (interactions[i, 0] in self.diaries_data_self_reported and
+                            interactions[i, 1] in self.diaries_data_self_reported[interactions[i, 0]]) or \
+                            (interactions[i, 1] in self.diaries_data_self_reported and
+                             interactions[i, 0] in self.diaries_data_self_reported[interactions[i, 1]])
+                valid_interactions.append(is_valid)
+
+        if not return_list:
+            return valid_interactions[0]
+        return np.array(valid_interactions)
+
 
 if __name__ == '__main__':
-    high_school_data = HighSchoolData(preprocessed=True)
-    student = high_school_data.get_student_raw_interactions(1, reset_start_time=True)
-    # high_school_data.get_student_preprocessed_interactions(1)
-    # high_school_data.preprocess(save_as_text="data/HighSchoolContactFriendships2013/preprocessed-High-School_data_2013.txt")
-    print(len(high_school_data.get_student_preprocessed_interactions(1)))
+    high_school_data = HighSchoolData()
+
+    for sid in list(high_school_data.get_student_ids())[:10]:
+        high_school_data.plot_student_interactions(sid)
+
+
