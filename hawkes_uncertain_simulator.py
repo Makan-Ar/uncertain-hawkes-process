@@ -40,6 +40,7 @@ class HawkesUncertainModel:
         self.poisson = SimuPoissonProcess(self.p_lambda, end_time=run_time, verbose=False)
         self.poisson.simulate()
 
+        # Simulate two exponential distribution as side information
         self.hawkes_exp = np.random.exponential(self.h_exp_beta, self.hawkes.n_total_jumps)
         self.poisson_exp = np.random.exponential(self.p_exp_beta, self.poisson.n_total_jumps)
 
