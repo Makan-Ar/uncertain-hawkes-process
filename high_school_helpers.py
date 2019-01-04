@@ -103,32 +103,43 @@ class HighSchoolData:
             self.run_preprocessing()
         return self.preprocessed_network_data[np.where(self.preprocessed_network_data[:, 0:2] == student_id)[0]]
 
-    def plot_student_interactions(self, student_id, based_on_self_reported_diary_only=False, separate_days=True):
-        interactions = self.get_student_preprocessed_interactions(student_id)
+    def plot_student_interactions(self, student_id=None, based_on_self_reported_diary_only=False, separate_days=True):
+        """
+        Plots student interactions as a scatter plot with Time on X axis and duration of each interaction on the Y axis.
+        :param student_id: ID of the student. If None, all interactinos will be plotted.
+        :param based_on_self_reported_diary_only: If True, only self reported interactions by the student_id will be
+                                                  considered as valid. Will be ignored if `student_id` is None.
+        :param separate_days: If True, each day of the data collection will have its own subplot.
+        """
+        if student_id is not None:
+            interactions = self.get_student_preprocessed_interactions(student_id)
+        else:
+            interactions = self.preprocessed_network_data
+
         is_validated = self.is_interaction_in_diary(interactions, based_on_self_reported_diary_only, student_id)
         validated_interactions = interactions[np.where(is_validated == True)[0], :]
         proximity_interactions = interactions[np.where(is_validated == False)[0], :]
 
         if separate_days:
-            fig, axs = plt.subplots(len(self.daily_time_intervals), 1, sharex=True, sharey=True)
+            fig, axs = plt.subplots(len(self.daily_time_intervals), 1)
             for i, ax in enumerate(axs):
-                d_ind = np.where(validated_interactions[:, 4] == i + 1)
-                p1 = ax.scatter(validated_interactions[d_ind, 2], validated_interactions[d_ind, 3], c='blue')
-
                 d_ind = np.where(proximity_interactions[:, 4] == i + 1)
-                p2 = ax.scatter(proximity_interactions[d_ind, 2], proximity_interactions[d_ind, 3], c='red')
+                p1 = ax.scatter(proximity_interactions[d_ind, 2], proximity_interactions[d_ind, 3], c='red', alpha=0.6)
+
+                d_ind = np.where(validated_interactions[:, 4] == i + 1)
+                p2 = ax.scatter(validated_interactions[d_ind, 2], validated_interactions[d_ind, 3], c='blue', alpha=0.6)
 
                 ax.set_title("Day {}".format(i + 1))
 
-            fig.legend((p1, p2), ('Validated Interactions', 'Proximity Only Interactions'), 'upper right')
+            fig.legend((p1, p2), ('Proximity Only Interactions', 'Validated Interactions'), 'upper right')
             fig.text(0.5, 0.03, 'Time (s)', ha='center')
             fig.text(0.03, 0.5, 'Length of Interaction (s)', va='center', rotation='vertical')
             fig.suptitle("Student ID: {}".format(student_id), fontsize=16)
         else:
-            plt.scatter(validated_interactions[:, 2], validated_interactions[:, 3], c='blue',
-                       label="Validated Interactions")
-            plt.scatter(proximity_interactions[:, 2], proximity_interactions[:, 3], c='red',
-                       label="Proximity Only Interactions")
+            plt.scatter(proximity_interactions[:, 2], proximity_interactions[:, 3], c='red', alpha=0.6,
+                        label="Proximity Only Interactions")
+            plt.scatter(validated_interactions[:, 2], validated_interactions[:, 3], c='blue', alpha=0.6,
+                        label="Validated Interactions")
             plt.xlabel("Time (s)")
             plt.ylabel("Length of Interaction (s)")
             plt.legend()
@@ -144,8 +155,9 @@ class HighSchoolData:
         :param student_id: must be passed if `based_on_self_reported_diary_only` is True
         :return: boolean or a list of boolean
         """
-        if based_on_self_reported_diary_only and student_id is None:
-            exit("Cannot check for self reported diary without student id")
+        if student_id is None:
+            based_on_self_reported_diary_only = False
+            print("Warning: Cannot check for self reported diary without student id")
 
         return_list = True
         valid_interactions = []
@@ -181,5 +193,6 @@ if __name__ == '__main__':
     # s1 = high_school_data.get_student_preprocessed_interactions(1)
     # s1 = high_school_data.get_student_raw_interactions(1)
     # print(s1[s1[:, 2].argsort()])
-    for sid in list(high_school_data.get_student_ids())[:2]:
-        high_school_data.plot_student_interactions(sid, separate_days=True)
+    # for sid in list(high_school_data.get_student_ids())[:10]:
+    #     high_school_data.plot_student_interactions(sid, separate_days=True)
+    high_school_data.plot_student_interactions(separate_days=True)
