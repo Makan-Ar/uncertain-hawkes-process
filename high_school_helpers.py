@@ -6,11 +6,13 @@ class HighSchoolData:
     network_data_path = "data/HighSchoolContactFriendships2013/High-School_data_2013.csv"
     preprocessed_network_data_path = "data/HighSchoolContactFriendships2013/preprocessed-High-School_data_2013.txt"
     diaries_data_path = 'data/HighSchoolContactFriendships2013/Contact-diaries-network_data_2013.csv'
+    daily_time_intervals = [(1385982020, 1385999980), (1386054020, 1386086380), (1386140420, 1386172780),
+                            (1386226820, 1386259180), (1386313220, 1386345580)]
     start_time = 1385982020
     end_time = 1386345580
     interaction_duration = 20
     network_data = None  # raw high school data
-    preprocessed_network_data = None  # data in form of student1_id, student2_id, interaction_start_time, duration
+    preprocessed_network_data = None  # student1_id, student2_id, interaction_start_time, duration, day number
     diaries_data_self_reported = None  # diary data keyed by the person who reported
     diaries_data_peer_reported = None  # diary data keyed by the person who was reported
     __student_ids = None
@@ -74,13 +76,19 @@ class HighSchoolData:
                 temp_inters[inter_key].append([temp_network_data[i, 0], self.interaction_duration])
                 total_interactions += 1
 
-        self.preprocessed_network_data = np.zeros((total_interactions, 4), dtype=int)
+        self.preprocessed_network_data = np.zeros((total_interactions, 5), dtype=int)
         cnt = 0
+        day_number = 0
         for student_one, student_two in temp_inters:
             for i in range(len(temp_inters[(student_one, student_two)])):
-                self.preprocessed_network_data[cnt] = [student_one, student_two,
-                                                       temp_inters[(student_one, student_two)][i][0],
-                                                       temp_inters[(student_one, student_two)][i][1]]
+                s_time = temp_inters[(student_one, student_two)][i][0]
+                for enu, t in enumerate(self.daily_time_intervals):
+                    if (t[0] - self.start_time) <= s_time <= (t[1] - self.start_time):
+                        day_number = enu + 1
+                        break
+
+                self.preprocessed_network_data[cnt] = [student_one, student_two, s_time,
+                                                       temp_inters[(student_one, student_two)][i][1], day_number]
                 cnt += 1
 
         self.preprocessed_network_data = self.preprocessed_network_data[self.preprocessed_network_data[:, 2].argsort()]
@@ -95,21 +103,37 @@ class HighSchoolData:
             self.run_preprocessing()
         return self.preprocessed_network_data[np.where(self.preprocessed_network_data[:, 0:2] == student_id)[0]]
 
-    def plot_student_interactions(self, student_id, based_on_self_reported_diary_only=False):
+    def plot_student_interactions(self, student_id, based_on_self_reported_diary_only=False, separate_days=True):
         interactions = self.get_student_preprocessed_interactions(student_id)
         is_validated = self.is_interaction_in_diary(interactions, based_on_self_reported_diary_only, student_id)
+        validated_interactions = interactions[np.where(is_validated == True)[0], :]
+        proximity_interactions = interactions[np.where(is_validated == False)[0], :]
 
-        validated_interactions = np.where(is_validated == True)[0]
-        plt.scatter(interactions[validated_interactions, 2], interactions[validated_interactions, 3], c='blue',
-                    label="Validated Interactions")
+        if separate_days:
+            fig, axs = plt.subplots(len(self.daily_time_intervals), 1, sharex=True, sharey=True)
+            for i, ax in enumerate(axs):
+                d_ind = np.where(validated_interactions[:, 4] == i + 1)
+                p1 = ax.scatter(validated_interactions[d_ind, 2], validated_interactions[d_ind, 3], c='blue')
 
-        proximity_interactions = np.where(is_validated == False)[0]
-        plt.scatter(interactions[proximity_interactions, 2], interactions[proximity_interactions, 3], c='red',
-                    label="Proximity Only Interactions")
-        plt.legend()
-        plt.title("Student ID: {}".format(student_id))
-        plt.xlabel("Time (s)")
-        plt.ylabel("Length of Interaction (s)")
+                d_ind = np.where(proximity_interactions[:, 4] == i + 1)
+                p2 = ax.scatter(proximity_interactions[d_ind, 2], proximity_interactions[d_ind, 3], c='red')
+
+                ax.set_title("Day {}".format(i + 1))
+
+            fig.legend((p1, p2), ('Validated Interactions', 'Proximity Only Interactions'), 'upper right')
+            fig.text(0.5, 0.03, 'Time (s)', ha='center')
+            fig.text(0.03, 0.5, 'Length of Interaction (s)', va='center', rotation='vertical')
+            fig.suptitle("Student ID: {}".format(student_id), fontsize=16)
+        else:
+            plt.scatter(validated_interactions[:, 2], validated_interactions[:, 3], c='blue',
+                       label="Validated Interactions")
+            plt.scatter(proximity_interactions[:, 2], proximity_interactions[:, 3], c='red',
+                       label="Proximity Only Interactions")
+            plt.xlabel("Time (s)")
+            plt.ylabel("Length of Interaction (s)")
+            plt.legend()
+
+        plt.tight_layout()
         plt.show()
 
     def is_interaction_in_diary(self, interactions, based_on_self_reported_diary_only=False, student_id=None):
@@ -147,8 +171,15 @@ class HighSchoolData:
 
 if __name__ == '__main__':
     high_school_data = HighSchoolData()
+    # print(np.shape(high_school_data.preprocessed_network_data))
+    # print(high_school_data.preprocessed_network_data)
+    # for i in range(len(high_school_data.preprocessed_network_data)):
+    #     print(high_school_data.preprocessed_network_data[i, 2])
 
-    for sid in list(high_school_data.get_student_ids())[:10]:
-        high_school_data.plot_student_interactions(sid)
-
-
+    # print(high_school_data.preprocessed_network_data[:, 2:4])
+    # print(np.shape(high_school_data.preprocessed_network_data))
+    # s1 = high_school_data.get_student_preprocessed_interactions(1)
+    # s1 = high_school_data.get_student_raw_interactions(1)
+    # print(s1[s1[:, 2].argsort()])
+    for sid in list(high_school_data.get_student_ids())[:2]:
+        high_school_data.plot_student_interactions(sid, separate_days=True)
