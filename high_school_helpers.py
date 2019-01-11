@@ -106,13 +106,15 @@ class HighSchoolData:
     def plot_student_interactions(self, student_id=None, based_on_self_reported_diary_only=False, separate_days=True):
         """
         Plots student interactions as a scatter plot with Time on X axis and duration of each interaction on the Y axis.
-        :param student_id: ID of the student. If None, all interactinos will be plotted.
+        :param student_id: ID of the student. If None, all interactions will be plotted.
         :param based_on_self_reported_diary_only: If True, only self reported interactions by the student_id will be
                                                   considered as valid. Will be ignored if `student_id` is None.
         :param separate_days: If True, each day of the data collection will have its own subplot.
         """
+        fig_title = "All Student Interactions"
         if student_id is not None:
             interactions = self.get_student_preprocessed_interactions(student_id)
+            fig_title = "Student ID: {}".format(student_id)
         else:
             interactions = self.preprocessed_network_data
 
@@ -134,7 +136,7 @@ class HighSchoolData:
             fig.legend((p1, p2), ('Proximity Only Interactions', 'Validated Interactions'), 'upper right')
             fig.text(0.5, 0.03, 'Time (s)', ha='center')
             fig.text(0.03, 0.5, 'Length of Interaction (s)', va='center', rotation='vertical')
-            fig.suptitle("Student ID: {}".format(student_id), fontsize=16)
+            fig.suptitle(fig_title, fontsize=16)
         else:
             plt.scatter(proximity_interactions[:, 2], proximity_interactions[:, 3], c='red', alpha=0.6,
                         label="Proximity Only Interactions")
@@ -142,6 +144,7 @@ class HighSchoolData:
                         label="Validated Interactions")
             plt.xlabel("Time (s)")
             plt.ylabel("Length of Interaction (s)")
+            plt.title(fig_title)
             plt.legend()
 
         plt.tight_layout()
@@ -150,12 +153,12 @@ class HighSchoolData:
     def is_interaction_in_diary(self, interactions, based_on_self_reported_diary_only=False, student_id=None):
         """
         Check if the interaction is in the diary.
-        :param interactions: must be a list in the same format as preprocessed_network_data or a single row
+        :param interactions: must be a list in the same format as preprocessed_contact_data or a single row
         :param based_on_self_reported_diary_only: if true, only looks for the interaction in self reported
         :param student_id: must be passed if `based_on_self_reported_diary_only` is True
         :return: boolean or a list of boolean
         """
-        if student_id is None:
+        if student_id is None and based_on_self_reported_diary_only:
             based_on_self_reported_diary_only = False
             print("Warning: Cannot check for self reported diary without student id")
 
@@ -181,18 +184,25 @@ class HighSchoolData:
         return np.array(valid_interactions)
 
 
+# class BaseLineClassifier(HighSchoolData):
+#     def __inti__(self):
+#         HighSchoolData.__init__()
+        
+
 if __name__ == '__main__':
     high_school_data = HighSchoolData()
-    # print(np.shape(high_school_data.preprocessed_network_data))
-    # print(high_school_data.preprocessed_network_data)
-    # for i in range(len(high_school_data.preprocessed_network_data)):
-    #     print(high_school_data.preprocessed_network_data[i, 2])
+    # print(np.shape(high_school_data.preprocessed_contact_data))
+    # print(high_school_data.preprocessed_contact_data)
+    # for i in range(len(high_school_data.preprocessed_contact_data)):
+    #     print(high_school_data.preprocessed_contact_data[i, 2])
 
-    # print(high_school_data.preprocessed_network_data[:, 2:4])
-    # print(np.shape(high_school_data.preprocessed_network_data))
+    # print(high_school_data.preprocessed_contact_data[:, 2:4])
+    # print(np.shape(high_school_data.preprocessed_contact_data))
     # s1 = high_school_data.get_student_preprocessed_interactions(1)
     # s1 = high_school_data.get_student_raw_interactions(1)
     # print(s1[s1[:, 2].argsort()])
-    # for sid in list(high_school_data.get_student_ids())[:10]:
-    #     high_school_data.plot_student_interactions(sid, separate_days=True)
-    high_school_data.plot_student_interactions(separate_days=True)
+
+    for sid in list(high_school_data.get_student_ids())[:10]:
+        high_school_data.plot_student_interactions(sid, separate_days=True)
+    
+    # high_school_data.plot_student_interactions(separate_days=True)
