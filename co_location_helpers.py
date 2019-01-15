@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -36,45 +37,88 @@ import matplotlib.pyplot as plt
 # 36858 matches between both
 
 
-class SFHHData:
-    base_data_path = "data/SFHH/"
-    contact_data_path = "data/SFHH/tij_SFHH.dat_"
-    co_location_data_path = "data/SFHH/tij_pres_SFHH.dat"
-    # contacts_daily_time_intervals = [(32520, 77580), (115900, 146820)]
-    # co_locaiton_daily_time_intervals = [(31500, 71980), (115220, 138040)]
-    # start_time = 31500
-    # end_time = 146820
-
-    daily_time_intervals = [(31500, 77580), (115220, 146820)]  # (min, max) of both datasets
+class CoLocationData:
+    dataset_info = {
+        "SFHH": {"name": "SFHH"},
+        "high_school": {"name": "Thiers13"},
+        "hospital": {"name": "LH10"},
+        "primary_school": {"name": "LyonSchool"},
+        "workplace_13": {"name": "InVS13"},
+        "workplace_15": {"name": "InVS15"}
+    }
+    # base_data_path = "data/co-presence/"
+    # base_preprocessed_data_path = "data/co-presence/preprocessed/"
+    base_data_path = "/shared/DataSets/SocioPatterns/co-presence"
+    base_preprocessed_data_path = "/shared/Results/HawkesUncertainEvents/datasets/co-presence/preprocessed/"
+    dataset_name = None
+    day_intervals = None
     interaction_duration = 20
-    contact_data = None  # raw SFHH contact data
-    co_location_data = None  # raw SFHH co-location data
-    preprocessed_contact_data = {}  # (volunteer1_id, (<) volunteer2_id): [interaction_start_time, duration]
-    preprocessed_co_location_data = {}  # (volunteer1_id, volunteer2_id): [interaction_start_time, duration]
+    contact_data = None  # raw contact data
+    co_location_data = None  # raw co-location data
+    preprocessed_contact_data = {}  # (volunteer1_id, (<) volunteer2_id): [interaction_start_time, duration] for contact
+    preprocessed_co_location_data = {}  # (volunteer1_id, volunteer2_id): [interaction_start_time, duration] for co-loc
     preprocessed_co_location_data_list = []  # vol1_id, vol2_id, inter_start_time, duration, is_in_contact, day_number
     contact_data_interactions = {}  # dict, keyed by volunteer id and a list of all people who he/she has interacted w/
     co_location_data_interactions = {}  # same as contact_data_interactions, but for co-location data
     __volunteer_ids = None
 
-    def __init__(self, load_form_pickle=True):
+    def __init__(self, dataset_name, load_form_pickle=True):
+        self.dataset_name = dataset_name
         if not load_form_pickle:
-            self.contact_data = np.genfromtxt(self.contact_data_path, dtype=int)
-            self.co_location_data = np.genfromtxt(self.co_location_data_path, dtype=int)
+            print("Loading contact data...")
+            self.contact_data = np.genfromtxt(self.base_data_path + "contact/tij_" +
+                                              self.dataset_info[self.dataset_name]["name"] + ".dat", dtype=int)
+            print("Loading co-location data...")
+            self.co_location_data = np.genfromtxt(self.base_data_path + "co-presence/tij_pres_" +
+                                                  self.dataset_info[self.dataset_name]["name"] + ".dat", dtype=int)
+            print("Running preprocessing on contact data...")
             self.run_preprocessing_on_contact_data()
+            print("Running preprocessing on co-location data...")
             self.run_preprocessing_on_co_location_data()
+            print("Checking for co-location interactions in contact data...")
             self.__check_for_co_location_interactions_in_contact()
+            print("Getting day intervals...")
+            self.get_day_intervals()
 
-            np.save(self.base_data_path + "preprocessed_data", [self.contact_data, self.co_location_data,
-                                                                self.preprocessed_contact_data,
-                                                                self.preprocessed_co_location_data,
-                                                                self.preprocessed_co_location_data_list,
-                                                                self.contact_data_interactions,
-                                                                self.co_location_data_interactions])
+            if not os.path.exists(self.base_preprocessed_data_path):
+                os.makedirs(self.base_preprocessed_data_path)
+
+            print("Saving preprocessed data...")
+            np.save(self.base_preprocessed_data_path + self.dataset_info[self.dataset_name]["name"],
+                    [self.contact_data, self.co_location_data, self.preprocessed_contact_data,
+                     self.preprocessed_co_location_data, self.preprocessed_co_location_data_list,
+                     self.contact_data_interactions, self.co_location_data_interactions, self.day_intervals])
         else:
-            self.contact_data, self.co_location_data, self.preprocessed_contact_data,\
+            print("Loading preprocessed data...")
+            self.contact_data, self.co_location_data, self.preprocessed_contact_data, \
              self.preprocessed_co_location_data, self.preprocessed_co_location_data_list, \
-             self.contact_data_interactions, self.co_location_data_interactions = \
-                np.load(self.base_data_path + "preprocessed_data.npy")
+             self.contact_data_interactions, self.co_location_data_interactions, self.day_intervals = \
+             np.load(self.base_preprocessed_data_path + self.dataset_info[self.dataset_name]["name"] + ".npy")
+
+        print("Initialization Done!")
+
+    def get_day_intervals(self):
+        day_t_diff = 18000  # number of seconds in 5 hours
+        self.day_intervals = []
+        day_start_time = self.contact_data[0, 0]
+        for i in range(len(self.contact_data) - 1):
+            if self.contact_data[i, 0] + day_t_diff <= self.contact_data[i + 1, 0]:
+                self.day_intervals.append([day_start_time, self.contact_data[i, 0]])
+                day_start_time = self.contact_data[i + 1, 0]
+        self.day_intervals.append([day_start_time, self.contact_data[-1, 0]])
+
+        day_number = 0
+        day_start_time = self.co_location_data[0, 0]
+        for i in range(len(self.co_location_data) - 1):
+            if self.co_location_data[i, 0] + day_t_diff <= self.co_location_data[i + 1, 0]:
+                self.day_intervals[day_number][0] = min(self.day_intervals[day_number][0], day_start_time)
+                self.day_intervals[day_number][1] = max(self.day_intervals[day_number][1], self.co_location_data[i, 0])
+                day_start_time = self.co_location_data[i + 1, 0]
+                day_number += 1
+
+        self.day_intervals[day_number][0] = min(self.day_intervals[day_number][0], day_start_time)
+        self.day_intervals[day_number][1] = max(self.day_intervals[day_number][1], self.co_location_data[-1, 0])
+        return self.day_intervals
 
     def run_preprocessing_on_contact_data(self, save_as_text=None):
         if len(self.preprocessed_contact_data) > 0:
@@ -132,7 +176,7 @@ class SFHHData:
         for volunteer_one, volunteer_two in preprocessed_data:
             for i in range(len(preprocessed_data[(volunteer_one, volunteer_two)])):
                 s_time = preprocessed_data[(volunteer_one, volunteer_two)][i][0]
-                for enu, t in enumerate(self.daily_time_intervals):
+                for enu, t in enumerate(self.day_intervals):
                     if t[0] <= s_time <= t[1]:
                         day_number = enu + 1
                         break
@@ -153,13 +197,11 @@ class SFHHData:
         :param vol_id: ID of the volunteer. If None, all interactions will be plotted.
         :param separate_days: If True, each day of the data collection will have its own subplot.
         """
-        fig_title = "All Volunteer Interactions"
+        fig_title = f"{self.dataset_name} Data - All Volunteer Interactions"
         if vol_id is not None:
             interactions = self.preprocessed_co_location_data_list[np.where(
                 self.preprocessed_co_location_data_list[:, 0:2] == vol_id)[0]]
-            print(interactions)
-            print(len(interactions))
-            fig_title = "Volunteer ID: {}".format(vol_id)
+            fig_title = f"{self.dataset_name} Data - Volunteer ID: {vol_id}"
         else:
             interactions = self.preprocessed_co_location_data_list
 
@@ -167,7 +209,7 @@ class SFHHData:
         not_in_contact_interactions = interactions[np.where(interactions[:, 5] == 0)[0], :]
 
         if separate_days:
-            fig, axs = plt.subplots(len(self.daily_time_intervals), 1)
+            fig, axs = plt.subplots(len(self.day_intervals), 1)
             for i, ax in enumerate(axs):
                 d_ind = np.where(not_in_contact_interactions[:, 4] == i + 1)
                 p1 = ax.scatter(not_in_contact_interactions[d_ind, 2], not_in_contact_interactions[d_ind, 3], c='red',
@@ -211,7 +253,7 @@ class SFHHData:
                             is_in_contact = 1
                             break
 
-                for enu, t in enumerate(self.daily_time_intervals):
+                for enu, t in enumerate(self.day_intervals):
                     if t[0] <= inter_info[0] <= t[1]:
                         day_number = enu + 1
                         break
@@ -223,12 +265,13 @@ class SFHHData:
 
 
 if __name__ == '__main__':
-    sfhh = SFHHData(load_form_pickle=True)
-    cnt = 0
-    for vid in sfhh.get_volunteer_ids():
-        sfhh.plot_volunteer_interactions(vid)
+    datasets = ["SFHH", "high_school", "hospital", "primary_school", "workplace_13", "workplace_15"]
+    sfhh = CoLocationData(dataset_name="high_school", load_form_pickle=False)
 
-        cnt += 1
-        if cnt == 20:
-            break
-
+    # cnt = 0
+    # for vid in sfhh.get_volunteer_ids():
+    #     sfhh.plot_volunteer_interactions(vid)
+    #
+    #     cnt += 1
+    #     if cnt == 20:
+    #         break
