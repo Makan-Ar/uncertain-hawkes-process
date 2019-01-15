@@ -1,6 +1,7 @@
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+from joblib import Parallel, delayed
 
 # contact_data_path = "data/Hospital10/detailed_list_of_contacts_Hospital.dat_"
 # co_location_data_path = "data/Hospital10/tij_pres_LH10.dat"
@@ -48,7 +49,7 @@ class CoLocationData:
     }
     # base_data_path = "data/co-presence/"
     # base_preprocessed_data_path = "data/co-presence/preprocessed/"
-    base_data_path = "/shared/DataSets/SocioPatterns/co-presence"
+    base_data_path = "/shared/DataSets/SocioPatterns/co-presence/"
     base_preprocessed_data_path = "/shared/Results/HawkesUncertainEvents/datasets/co-presence/preprocessed/"
     dataset_name = None
     day_intervals = None
@@ -75,10 +76,10 @@ class CoLocationData:
             self.run_preprocessing_on_contact_data()
             print("Running preprocessing on co-location data...")
             self.run_preprocessing_on_co_location_data()
-            print("Checking for co-location interactions in contact data...")
-            self.__check_for_co_location_interactions_in_contact()
             print("Getting day intervals...")
             self.get_day_intervals()
+            print("Checking for co-location interactions in contact data...")
+            self.__check_for_co_location_interactions_in_contact()
 
             if not os.path.exists(self.base_preprocessed_data_path):
                 os.makedirs(self.base_preprocessed_data_path)
@@ -95,9 +96,13 @@ class CoLocationData:
              self.contact_data_interactions, self.co_location_data_interactions, self.day_intervals = \
              np.load(self.base_preprocessed_data_path + self.dataset_info[self.dataset_name]["name"] + ".npy")
 
-        print("Initialization Done!")
+        print(f"Initialization Done for {self.dataset_name}!")
 
     def get_day_intervals(self):
+        if self.dataset_name == "hospital":
+            self.day_intervals = [[39600, 298780]]
+            return self.day_intervals
+
         day_t_diff = 18000  # number of seconds in 5 hours
         self.day_intervals = []
         day_start_time = self.contact_data[0, 0]
@@ -118,6 +123,7 @@ class CoLocationData:
 
         self.day_intervals[day_number][0] = min(self.day_intervals[day_number][0], day_start_time)
         self.day_intervals[day_number][1] = max(self.day_intervals[day_number][1], self.co_location_data[-1, 0])
+        print(self.day_intervals)
         return self.day_intervals
 
     def run_preprocessing_on_contact_data(self, save_as_text=None):
@@ -208,7 +214,7 @@ class CoLocationData:
         in_contact_interactions = interactions[np.where(interactions[:, 5] == 1)[0], :]
         not_in_contact_interactions = interactions[np.where(interactions[:, 5] == 0)[0], :]
 
-        if separate_days:
+        if separate_days and 6 > len(self.day_intervals) > 1:
             fig, axs = plt.subplots(len(self.day_intervals), 1)
             for i, ax in enumerate(axs):
                 d_ind = np.where(not_in_contact_interactions[:, 4] == i + 1)
@@ -266,12 +272,17 @@ class CoLocationData:
 
 if __name__ == '__main__':
     datasets = ["SFHH", "high_school", "hospital", "primary_school", "workplace_13", "workplace_15"]
-    sfhh = CoLocationData(dataset_name="high_school", load_form_pickle=False)
 
-    # cnt = 0
-    # for vid in sfhh.get_volunteer_ids():
-    #     sfhh.plot_volunteer_interactions(vid)
-    #
-    #     cnt += 1
-    #     if cnt == 20:
-    #         break
+    # sfhh = CoLocationData(dataset_name="workplace_15", load_form_pickle=False)
+    # Parallel(n_jobs=6)(delayed(CoLocationData)(dataset_name=d, load_form_pickle=False) for d in datasets)
+
+    for d in datasets:
+        dat = CoLocationData(dataset_name=d, load_form_pickle=True)
+
+        cnt = 0
+        for vid in dat.get_volunteer_ids():
+            dat.plot_volunteer_interactions(vid)
+
+            cnt += 1
+            if cnt == 3:
+                break
