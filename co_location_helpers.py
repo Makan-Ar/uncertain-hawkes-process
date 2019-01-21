@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from joblib import Parallel, delayed
 
+
 # contact_data_path = "data/Hospital10/detailed_list_of_contacts_Hospital.dat_"
 # co_location_data_path = "data/Hospital10/tij_pres_LH10.dat"
 # contact_data_path = "data/SFHH/tij_SFHH.dat_"
@@ -56,8 +57,9 @@ class CoLocationData:
     interaction_duration = 20
     contact_data = None  # raw contact data
     co_location_data = None  # raw co-location data
-    preprocessed_contact_data = {}  # (volunteer1_id, (<) volunteer2_id): [interaction_start_time, duration] for contact
-    preprocessed_co_location_data = {}  # (volunteer1_id, volunteer2_id): [interaction_start_time, duration] for co-loc
+    preprocessed_contact_data = {}  # (volunteer1_id, (<) volunteer2_id): [[interaction_start_time, duration]]
+    preprocessed_co_location_data = {}  # (volunteer1_id, volunteer2_id):
+    # [[interaction_start_time, duration, is_in_contact]]
     preprocessed_co_location_data_list = []  # vol1_id, vol2_id, inter_start_time, duration, is_in_contact, day_number
     contact_data_interactions = {}  # dict, keyed by volunteer id and a list of all people who he/she has interacted w/
     co_location_data_interactions = {}  # same as contact_data_interactions, but for co-location data
@@ -92,9 +94,9 @@ class CoLocationData:
         else:
             print("Loading preprocessed data...")
             self.contact_data, self.co_location_data, self.preprocessed_contact_data, \
-             self.preprocessed_co_location_data, self.preprocessed_co_location_data_list, \
-             self.contact_data_interactions, self.co_location_data_interactions, self.day_intervals = \
-             np.load(self.base_preprocessed_data_path + self.dataset_info[self.dataset_name]["name"] + ".npy")
+            self.preprocessed_co_location_data, self.preprocessed_co_location_data_list, \
+            self.contact_data_interactions, self.co_location_data_interactions, self.day_intervals = \
+                np.load(self.base_preprocessed_data_path + self.dataset_info[self.dataset_name]["name"] + ".npy")
 
         print(f"Initialization Done for {self.dataset_name}!")
 
@@ -289,8 +291,8 @@ class CoLocationData:
         in_contact_interactions = in_contact_interactions[np.where(in_contact_interactions != 0)[0]]
         not_in_contact_interactions = not_in_contact_interactions[np.where(not_in_contact_interactions != 0)[0]]
 
-        plt.hist(not_in_contact_interactions, 50, color='red', alpha=0.5, label="Co-location Only")
-        plt.hist(in_contact_interactions, 50, color='blue', alpha=0.5, label="Co-location in Contact")
+        plt.hist(not_in_contact_interactions, 50, color='red', density=True, alpha=0.5, label="Co-location Only")
+        plt.hist(in_contact_interactions, 50, color='blue', density=True, alpha=0.5, label="Co-location in Contact")
 
         # plt.xscale("log")
         # plt.yscale("log")
@@ -301,6 +303,33 @@ class CoLocationData:
         plt.tight_layout()
         plt.show()
 
+    def plot_contact_duration_histogram_for_a_pair(self, vol_id_1, vol_id_2):
+        interaction_key = (vol_id_1, vol_id_2) if vol_id_1 < vol_id_2 else (vol_id_2, vol_id_1)
+        if interaction_key not in self.preprocessed_co_location_data:
+            exit("People with the given ids never interacted.")
+
+        in_contact_interactions = []
+        not_in_contact_interactions = []
+
+        for contact_info in self.preprocessed_co_location_data[interaction_key]:
+            if contact_info[2] == 0:
+                not_in_contact_interactions.append(contact_info[1])
+            else:
+                in_contact_interactions.append(contact_info[1])
+
+        plt.hist(not_in_contact_interactions, 50, color='red', alpha=0.5, density=True, label="Co-location Only")
+        plt.hist(in_contact_interactions, 50, color='blue', alpha=0.5, density=True, label="Co-location in Contact")
+
+        plt.xlabel("Event (Contact) Duration (s)")
+        plt.ylabel("Probability")
+        plt.title(f"Histogram of Contact Durations \n "
+                  f"{self.dataset_name} Data - Volunteer Pair IDs: {vol_id_1}, {vol_id_2}")
+        plt.legend()
+        plt.tight_layout()
+        plt.show()
+
+
+    
     def __check_for_co_location_interactions_in_contact(self):
         if not self.preprocessed_co_location_data_list:
             self.preprocessed_co_location_data_list = []
@@ -312,9 +341,11 @@ class CoLocationData:
                 if inter_key in self.preprocessed_contact_data:
                     for con_inter_info in self.preprocessed_contact_data[inter_key]:
                         if min(inter_info[0] + inter_info[1], con_inter_info[0] + con_inter_info[1]) - \
-                           max(inter_info[0], con_inter_info[0]) > 0:
+                                max(inter_info[0], con_inter_info[0]) > 0:
                             is_in_contact = 1
                             break
+
+                inter_info.append(is_in_contact)
 
                 for enu, t in enumerate(self.day_intervals):
                     if t[0] <= inter_info[0] <= t[1]:
@@ -326,6 +357,14 @@ class CoLocationData:
 
         self.preprocessed_co_location_data_list = np.array(self.preprocessed_co_location_data_list, dtype=int)
 
+    def get_top_pairs_co_presence(self, n_pairs):
+        co_location_num_contact_between_pair = {}
+        for inter_key in self.preprocessed_co_location_data:
+            co_location_num_contact_between_pair[inter_key] = len(self.preprocessed_co_location_data[inter_key])
+
+        sorted_by_num_contact = sorted(co_location_num_contact_between_pair.items(), key=lambda kv: kv[1], reverse=True)
+        return [sorted_by_num_contact[i][0] for i in range(n_pairs)]
+
 
 if __name__ == '__main__':
     datasets = ["SFHH", "high_school", "hospital", "primary_school", "workplace_13", "workplace_15"]
@@ -333,15 +372,21 @@ if __name__ == '__main__':
     # sfhh = CoLocationData(dataset_name="workplace_15", load_form_pickle=False)
     # Parallel(n_jobs=6)(delayed(CoLocationData)(dataset_name=d, load_form_pickle=False) for d in datasets)
 
+    # for d in datasets:
+    # dat = CoLocationData(dataset_name=d, load_form_pickle=False)
+    # cnt = 0
+    # for vid in dat.get_volunteer_ids():
+    #     dat.plot_volunteer_interactions(vid)
+    #     dat.plot_contact_duration_histogram(vid)
+    #     dat.plot_contact_inter_arrival_histogram(vid)
+    #
+    #     cnt += 1
+    #     if cnt == 5:
+    #         break
+
     for d in datasets:
         dat = CoLocationData(dataset_name=d, load_form_pickle=True)
-        # dat.plot_contact_inter_arrival_histogram()
-        cnt = 0
-        for vid in dat.get_volunteer_ids():
-            dat.plot_volunteer_interactions(vid)
-            dat.plot_contact_duration_histogram(vid)
-            dat.plot_contact_inter_arrival_histogram(vid)
+        top_pairs = dat.get_top_pairs_co_presence(5)
 
-            cnt += 1
-            if cnt == 5:
-                break
+        for pair in top_pairs:
+            dat.plot_contact_duration_histogram_for_a_pair(pair[0], pair[1])
