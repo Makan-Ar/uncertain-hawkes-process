@@ -244,6 +244,29 @@ class CoLocationData:
         plt.tight_layout()
         plt.show()
 
+    def plot_contact_duration_histogram(self, vol_id=None):
+        fig_title = f"{self.dataset_name} Data - All Volunteer Interactions"
+        if vol_id is not None:
+            interactions = self.preprocessed_co_location_data_list[np.where(
+                self.preprocessed_co_location_data_list[:, 0:2] == vol_id)[0]]
+            fig_title = f"{self.dataset_name} Data - Volunteer ID: {vol_id}"
+        else:
+            interactions = self.preprocessed_co_location_data_list
+
+        in_contact_interactions = interactions[np.where(interactions[:, 5] == 1)[0], :]
+        not_in_contact_interactions = interactions[np.where(interactions[:, 5] == 0)[0], :]
+
+        plt.hist(not_in_contact_interactions[:, 3], color='red', alpha=0.5, density=True, label="Co-Location Only")
+        plt.hist(in_contact_interactions[:, 3], color='blue', alpha=0.5, density=True, label="Co-Location in Contact")
+
+        plt.xlabel("Event (Contact) Duration (s)")
+        plt.ylabel("Probability")
+        plt.title(fig_title)
+        plt.legend()
+        plt.tight_layout()
+        plt.show()
+
+
     def __check_for_co_location_interactions_in_contact(self):
         if not self.preprocessed_co_location_data_list:
             self.preprocessed_co_location_data_list = []
@@ -278,11 +301,12 @@ if __name__ == '__main__':
 
     for d in datasets:
         dat = CoLocationData(dataset_name=d, load_form_pickle=True)
-
-        cnt = 0
-        for vid in dat.get_volunteer_ids():
-            dat.plot_volunteer_interactions(vid)
-
-            cnt += 1
-            if cnt == 3:
-                break
+        dat.plot_contact_duration_histogram()
+        # cnt = 0
+        # for vid in dat.get_volunteer_ids():
+        #     # dat.plot_volunteer_interactions(vid)
+        #     dat.plot_contact_duration_histogram(vid)
+        #
+        #     cnt += 1
+        #     if cnt == 5:
+        #         break
