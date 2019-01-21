@@ -227,15 +227,15 @@ class CoLocationData:
 
                 ax.set_title("Day {}".format(i + 1))
 
-            fig.legend((p1, p2), ('Co-Location Only', 'Co-Location in Contact'), 'upper right')
+            fig.legend((p1, p2), ('Co-location Only', 'Co-location in Contact'), 'upper right')
             fig.text(0.5, 0.03, 'Time (s)', ha='center')
             fig.text(0.03, 0.5, 'Length of Interaction (s)', va='center', rotation='vertical')
             fig.suptitle(fig_title, fontsize=16)
         else:
             plt.scatter(not_in_contact_interactions[:, 2], not_in_contact_interactions[:, 3], c='red', alpha=0.6,
-                        label="Co-Location Only")
+                        label="Co-location Only")
             plt.scatter(in_contact_interactions[:, 2], in_contact_interactions[:, 3], c='blue', alpha=0.6,
-                        label="Co-Location in Contact")
+                        label="Co-location in Contact")
             plt.xlabel("Time (s)")
             plt.ylabel("Length of Interaction (s)")
             plt.title(fig_title)
@@ -249,16 +249,18 @@ class CoLocationData:
         if vol_id is not None:
             interactions = self.preprocessed_co_location_data_list[np.where(
                 self.preprocessed_co_location_data_list[:, 0:2] == vol_id)[0]]
-            fig_title = f"{self.dataset_name} Data - Volunteer ID: {vol_id}"
+            fig_title = f"Histogram of Contact Durations \n {self.dataset_name} Data - Volunteer ID: {vol_id}"
         else:
             interactions = self.preprocessed_co_location_data_list
 
-        in_contact_interactions = interactions[np.where(interactions[:, 5] == 1)[0], :]
-        not_in_contact_interactions = interactions[np.where(interactions[:, 5] == 0)[0], :]
+        in_contact_interactions = interactions[np.where(interactions[:, 5] == 1)[0], 3]
+        not_in_contact_interactions = interactions[np.where(interactions[:, 5] == 0)[0], 3]
 
-        plt.hist(not_in_contact_interactions[:, 3], color='red', alpha=0.5, density=True, label="Co-Location Only")
-        plt.hist(in_contact_interactions[:, 3], color='blue', alpha=0.5, density=True, label="Co-Location in Contact")
+        plt.hist(not_in_contact_interactions, 50, color='red', alpha=0.5, density=True, label="Co-location Only")
+        plt.hist(in_contact_interactions, 50, color='blue', alpha=0.5, density=True, label="Co-location in Contact")
 
+        # plt.xscale("log")
+        # plt.yscale("log")
         plt.xlabel("Event (Contact) Duration (s)")
         plt.ylabel("Probability")
         plt.title(fig_title)
@@ -266,6 +268,38 @@ class CoLocationData:
         plt.tight_layout()
         plt.show()
 
+    def plot_contact_inter_arrival_histogram(self, vol_id):
+        interactions = self.preprocessed_co_location_data_list[np.where(
+            self.preprocessed_co_location_data_list[:, 0:2] == vol_id)[0]]
+        fig_title = f"Histogram of Contact Inter-arrival Time \n {self.dataset_name} Data - Volunteer ID: {vol_id}"
+
+        in_contact_interactions = interactions[np.where(interactions[:, 5] == 1)[0], 2]
+        not_in_contact_interactions = interactions[np.where(interactions[:, 5] == 0)[0], 2]
+
+        in_contact_interactions.sort()
+        not_in_contact_interactions.sort()
+
+        # compute inter-arrival times
+        in_contact_interactions = np.array([in_contact_interactions[i] - in_contact_interactions[i - 1]
+                                            for i in range(1, len(in_contact_interactions))])
+        not_in_contact_interactions = np.array([not_in_contact_interactions[i] - not_in_contact_interactions[i - 1]
+                                                for i in range(1, len(not_in_contact_interactions))])
+
+        # remove all occurrences of 0 in inter-arrival time
+        in_contact_interactions = in_contact_interactions[np.where(in_contact_interactions != 0)[0]]
+        not_in_contact_interactions = not_in_contact_interactions[np.where(not_in_contact_interactions != 0)[0]]
+
+        plt.hist(not_in_contact_interactions, 50, color='red', alpha=0.5, label="Co-location Only")
+        plt.hist(in_contact_interactions, 50, color='blue', alpha=0.5, label="Co-location in Contact")
+
+        # plt.xscale("log")
+        # plt.yscale("log")
+        plt.xlabel("Event Inter-arrival Time (s)")
+        plt.ylabel("Probability")
+        plt.title(fig_title)
+        plt.legend()
+        plt.tight_layout()
+        plt.show()
 
     def __check_for_co_location_interactions_in_contact(self):
         if not self.preprocessed_co_location_data_list:
@@ -301,12 +335,13 @@ if __name__ == '__main__':
 
     for d in datasets:
         dat = CoLocationData(dataset_name=d, load_form_pickle=True)
-        dat.plot_contact_duration_histogram()
-        # cnt = 0
-        # for vid in dat.get_volunteer_ids():
-        #     # dat.plot_volunteer_interactions(vid)
-        #     dat.plot_contact_duration_histogram(vid)
-        #
-        #     cnt += 1
-        #     if cnt == 5:
-        #         break
+        # dat.plot_contact_inter_arrival_histogram()
+        cnt = 0
+        for vid in dat.get_volunteer_ids():
+            dat.plot_volunteer_interactions(vid)
+            dat.plot_contact_duration_histogram(vid)
+            dat.plot_contact_inter_arrival_histogram(vid)
+
+            cnt += 1
+            if cnt == 5:
+                break
