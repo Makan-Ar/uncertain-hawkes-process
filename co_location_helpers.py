@@ -328,8 +328,46 @@ class CoLocationData:
         plt.tight_layout()
         plt.show()
 
+    def plot_contact_inter_arrival_histogram_for_a_pair(self, vol_id_1, vol_id_2):
+        interaction_key = (vol_id_1, vol_id_2) if vol_id_1 < vol_id_2 else (vol_id_2, vol_id_1)
+        if interaction_key not in self.preprocessed_co_location_data:
+            exit("People with the given ids never interacted.")
 
-    
+        in_contact_interactions = []
+        not_in_contact_interactions = []
+
+        for contact_info in self.preprocessed_co_location_data[interaction_key]:
+            if contact_info[2] == 0:
+                not_in_contact_interactions.append(contact_info[1])
+            else:
+                in_contact_interactions.append(contact_info[1])
+
+        in_contact_interactions.sort()
+        not_in_contact_interactions.sort()
+
+        # compute inter-arrival times
+        in_contact_interactions = np.array([in_contact_interactions[i] - in_contact_interactions[i - 1]
+                                            for i in range(1, len(in_contact_interactions))])
+        not_in_contact_interactions = np.array([not_in_contact_interactions[i] - not_in_contact_interactions[i - 1]
+                                                for i in range(1, len(not_in_contact_interactions))])
+
+        # remove all occurrences of 0 in inter-arrival time
+        in_contact_interactions = in_contact_interactions[np.where(in_contact_interactions != 0)[0]]
+        not_in_contact_interactions = not_in_contact_interactions[np.where(not_in_contact_interactions != 0)[0]]
+
+        plt.hist(not_in_contact_interactions, 50, color='red', density=True, alpha=0.5, label="Co-location Only")
+        plt.hist(in_contact_interactions, 50, color='blue', density=True, alpha=0.5, label="Co-location in Contact")
+
+        # plt.xscale("log")
+        # plt.yscale("log")
+        plt.xlabel("Event Inter-arrival Time (s)")
+        plt.ylabel("Probability")
+        plt.title(f"Histogram of Contact Inter-arrival Time \n"
+                  f"{self.dataset_name} Data - Volunteer Pair IDs: {vol_id_1}, {vol_id_2}")
+        plt.legend()
+        plt.tight_layout()
+        plt.show()
+
     def __check_for_co_location_interactions_in_contact(self):
         if not self.preprocessed_co_location_data_list:
             self.preprocessed_co_location_data_list = []
@@ -390,3 +428,4 @@ if __name__ == '__main__':
 
         for pair in top_pairs:
             dat.plot_contact_duration_histogram_for_a_pair(pair[0], pair[1])
+            dat.plot_contact_inter_arrival_histogram_for_a_pair(pair[0], pair[1])
