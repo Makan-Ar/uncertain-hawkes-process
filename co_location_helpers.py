@@ -323,7 +323,8 @@ class CoLocationData:
         plt.xlabel("Event (Contact) Duration (s)")
         plt.ylabel("Probability")
         plt.title(f"Histogram of Contact Durations \n "
-                  f"{self.dataset_name} Data - Volunteer Pair IDs: {vol_id_1}, {vol_id_2}")
+                  f"{self.dataset_name} Data - Volunteer Pair IDs: {vol_id_1}, {vol_id_2} \n "
+                  f"Num co-presence: {len(self.preprocessed_co_location_data[interaction_key])}")
         plt.legend()
         plt.tight_layout()
         plt.show()
@@ -363,7 +364,8 @@ class CoLocationData:
         plt.xlabel("Event Inter-arrival Time (s)")
         plt.ylabel("Probability")
         plt.title(f"Histogram of Contact Inter-arrival Time \n"
-                  f"{self.dataset_name} Data - Volunteer Pair IDs: {vol_id_1}, {vol_id_2}")
+                  f"{self.dataset_name} Data - Volunteer Pair IDs: {vol_id_1}, {vol_id_2} \n "
+                  f"Num co-presence: {len(self.preprocessed_co_location_data[interaction_key])}")
         plt.legend()
         plt.tight_layout()
         plt.show()
