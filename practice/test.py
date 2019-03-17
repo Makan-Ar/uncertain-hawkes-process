@@ -11,7 +11,7 @@ decays = 3 * np.ones((n_nodes, n_nodes))
 baseline = 0.5 * np.ones(n_nodes)
 hawkes_sim = SimuHawkesExpKernels(adjacency=adjacency, decays=decays, baseline=baseline, verbose=False)
 
-run_time = 10000
+run_time = 100000
 hawkes_sim.end_time = run_time
 dt = 0.01
 hawkes_sim.track_intensity(dt)
@@ -22,29 +22,34 @@ intensity = 0.5
 alpha = 0.2
 beta = 3
 
+
+def hawkes_cum_log_likelihood(hawkes_event_times, intensity, alpha, beta):
+    a_calc = np.zeros(len(hawkes_event_times))
+    for i in range(1, len(hawkes_event_times)):
+        a_calc[i] = np.exp(-1 * beta * hawkes_event_times[i] - hawkes_event_times[i - 1]) * (1 + a_calc[i - 1])
+    term1 = np.sum(np.log(intensity + alpha * a_calc))
+
+    term2 = np.sum(intensity * hawkes_event_times)
+
+    # ker = 0
+    # for k in range(0, len(hawkes_event_times)):
+    #     temp_ker = 0
+    #     for i in range(k + 1):
+    #         temp_ker += np.exp(-1 * beta * (hawkes_event_times[k] - hawkes_event_times[i])) - 1
+    #     ker += temp_ker
+    # term3 = (alpha / beta) * ker
+
+    ker_ = 0
+    for k in range(1, len(hawkes_event_times)):
+        ker_ += np.sum(np.exp(-1 * beta * (hawkes_event_times[k] - hawkes_event_times[0:k])) - 1)
+    term3 = (alpha / beta) * ker_
+
+    res = term1 - term2 + term3
+    return term1, term2, term3, res
+
+
 ti = time.time()
-a_calc = np.zeros(len(hawkes_event_times))
-for i in range(1, len(hawkes_event_times)):
-    a_calc[i] = np.exp(-1 * beta * hawkes_event_times[i] - hawkes_event_times[i - 1]) * (1 + a_calc[i - 1])
-term1 = np.sum(np.log(intensity + alpha * a_calc))
-
-term2 = np.sum(intensity * hawkes_event_times)
-
-# ker = 0
-# for k in range(0, len(hawkes_event_times)):
-#     temp_ker = 0
-#     for i in range(k + 1):
-#         temp_ker += np.exp(-1 * beta * (hawkes_event_times[k] - hawkes_event_times[i])) - 1
-#     ker += temp_ker
-# term3 = (alpha / beta) * ker
-
-ker_ = 0
-for k in range(1, len(hawkes_event_times)):
-    ker_ += np.sum(np.exp(-1 * beta * (hawkes_event_times[k] - hawkes_event_times[0:k])) - 1)
-term3 = (alpha / beta) * ker_
-
-
-res = term1 - term2 + term3
+# term1, term2, term3, res = hawkes_cum_log_likelihood(hawkes_event_times, intensity, alpha, beta)
 j = time.time() - ti
 
 hawkes = hwk.Hawkes(hawkes_event_times, intensity, alpha, beta)
@@ -59,7 +64,7 @@ with tf.Session() as sess:
 
 writer.close()
 print(term1t, term2t, term3t, rest)
-print(term1, term2, term3, res)
+# print(term1, term2, term3, res)
 print(jt)
 print(j)
 

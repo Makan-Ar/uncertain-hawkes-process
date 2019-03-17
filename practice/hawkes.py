@@ -8,9 +8,6 @@ import tensorflow as tf
 import tensorflow_probability as tfp
 from tensorflow_probability.python.internal import dtype_util
 
-# from tensorflow import contrib
-# autograph = contrib.autograph
-
 
 class Hawkes():
     def __init__(self,
@@ -18,10 +15,14 @@ class Hawkes():
                  background_intensity,
                  alpha,
                  beta,
+                 dtype=None,
                  name="Hawkes"):
 
         with tf.name_scope(name, values=[event_times, background_intensity, alpha, beta]) as name:
-            _dtype = dtype_util.common_dtype([event_times, background_intensity, alpha, beta], tf.float32)
+            if not dtype:
+                _dtype = dtype_util.common_dtype([event_times, background_intensity, alpha, beta], tf.float32)
+            else:
+                _dtype = dtype
             self._event_times = tf.convert_to_tensor(event_times, name="event_times", dtype=_dtype)
             self._bg_intensity = tf.convert_to_tensor(background_intensity, name="background_intensity", dtype=_dtype)
             self._alpha = tf.convert_to_tensor(alpha, name="alpha", dtype=_dtype)
@@ -61,7 +62,8 @@ class Hawkes():
 
             nagtive_log_likelihood = term1 - term2 + term3
 
-            return term1, term2, term3, nagtive_log_likelihood
+            return nagtive_log_likelihood
+            # return term1, term2, term3, nagtive_log_likelihood
 
     def evaluate_first_term(self, name="evaluate_first_term"):
         with self._name_scope(name):
