@@ -9,9 +9,9 @@ n_nodes = 1  # dimension of the Hawkes process
 adjacency = 0.2 * np.ones((n_nodes, n_nodes))
 decays = 3 * np.ones((n_nodes, n_nodes))
 baseline = 0.5 * np.ones(n_nodes)
-hawkes_sim = SimuHawkesExpKernels(adjacency=adjacency, decays=decays, baseline=baseline, verbose=False, seed=2398)
+hawkes_sim = SimuHawkesExpKernels(adjacency=adjacency, decays=decays, baseline=baseline, verbose=False)
 
-run_time = 100
+run_time = 10000
 hawkes_sim.end_time = run_time
 dt = 0.01
 hawkes_sim.track_intensity(dt)
@@ -25,18 +25,24 @@ beta = 3
 ti = time.time()
 a_calc = np.zeros(len(hawkes_event_times))
 for i in range(1, len(hawkes_event_times)):
-    a_calc[i] = np.exp(np.float32(-1) * np.float32(beta) * (hawkes_event_times[i] - hawkes_event_times[i - 1])) * (np.float32(1) + np.float32(a_calc[i - 1]))
+    a_calc[i] = np.exp(-1 * beta * hawkes_event_times[i] - hawkes_event_times[i - 1]) * (1 + a_calc[i - 1])
 term1 = np.sum(np.log(intensity + alpha * a_calc))
 
 term2 = np.sum(intensity * hawkes_event_times)
 
-ker = 0
-for k in range(0, len(hawkes_event_times)):
-    temp_ker = 0
-    for i in range(k + 1):
-        temp_ker += np.exp(-1 * beta * (hawkes_event_times[k] - hawkes_event_times[i])) - 1
-    ker += temp_ker
-term3 = (alpha / beta) * ker
+# ker = 0
+# for k in range(0, len(hawkes_event_times)):
+#     temp_ker = 0
+#     for i in range(k + 1):
+#         temp_ker += np.exp(-1 * beta * (hawkes_event_times[k] - hawkes_event_times[i])) - 1
+#     ker += temp_ker
+# term3 = (alpha / beta) * ker
+
+ker_ = 0
+for k in range(1, len(hawkes_event_times)):
+    ker_ += np.sum(np.exp(-1 * beta * (hawkes_event_times[k] - hawkes_event_times[0:k])) - 1)
+term3 = (alpha / beta) * ker_
+
 
 res = term1 - term2 + term3
 j = time.time() - ti

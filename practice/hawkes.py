@@ -64,31 +64,28 @@ class Hawkes():
             return term1, term2, term3, nagtive_log_likelihood
 
     def evaluate_first_term(self, name="evaluate_first_term"):
-        with tf.variable_scope("hawkes_ll_first_term"):
-            a = tf.get_variable('a', [self._num_events], dtype=tf.float32, initializer=tf.zeros_initializer())
-
-        with self._name_scope(name, values=[a]):
-            def cond(i, iters):
+        with self._name_scope(name):
+            def cond(first_term, prev_a_term, i, iters):
                 return tf.less(i, iters)
 
-            def body(i, iters):
-                with tf.variable_scope("hawkes_ll_first_term", reuse=tf.AUTO_REUSE):
-                    a = tf.get_variable('a')
-                a = tf.assign(a[i], tf.math.exp(tf.math.negative(self._beta) *
-                                                (self._event_times[i] - self._event_times[i - 1])) * (1. + a[i - 1]))
+            def body(first_term, prev_a_term, i, iters):
+                prev_a_term = tf.exp(tf.negative(self._beta) *
+                                     (self._event_times[i] - self._event_times[i - 1])) * (1. + prev_a_term)
 
-                with tf.control_dependencies([a]):
-                    return [tf.add(i, 1), iters]
+                first_term = tf.add(first_term, tf.log(tf.add(self._bg_intensity,
+                                                              tf.multiply(self._alpha, prev_a_term))))
+                return [first_term, prev_a_term, tf.add(i, 1), iters]
 
+            first_term = tf.constant(0., dtype=tf.float32)
+            prev_a_term = tf.constant(0., dtype=tf.float32)
             i = tf.constant(1, dtype=tf.int32)
             iters = tf.constant(self._num_events)
-            i, _ = tf.while_loop(cond, body, [i, iters], name="compute_A", parallel_iterations=1)
+            first_term, prev_a_term, i, _ = tf.while_loop(cond, body, [first_term, prev_a_term, i, iters],
+                                                          name="compute_first_term", parallel_iterations=1)
 
-            with tf.variable_scope("hawkes_ll_first_term", reuse=tf.AUTO_REUSE):
-                a = tf.get_variable('a')
+            # Adding the k = 0 (based on 0 indexing) to the total
+            first_term = tf.add(first_term, tf.log(self._bg_intensity))
 
-            with tf.control_dependencies([i]):
-                first_term = tf.reduce_sum(tf.log(tf.add(self._bg_intensity, tf.multiply(self._alpha, a))))
             return first_term
 
     def evaluate_second_term(self, name="evaluate_second_term"):
@@ -124,3 +121,32 @@ class Hawkes():
             with tf.name_scope(name, values=(
                     ([] if values is None else values) + self._graph_parents)) as scope:
                 yield scope
+
+    # # Older implementation of term 1 calculation
+    # def evaluate_first_term(self, name="evaluate_first_term"):
+    #     with tf.variable_scope("hawkes_ll_first_term"):
+    #         a = tf.get_variable('a', [self._num_events], dtype=tf.float32, initializer=tf.zeros_initializer())
+    #
+    #     with self._name_scope(name, values=[a]):
+    #         def cond(i, iters):
+    #             return tf.less(i, iters)
+    #
+    #         def body(i, iters):
+    #             with tf.variable_scope("hawkes_ll_first_term", reuse=tf.AUTO_REUSE):
+    #                 a = tf.get_variable('a')
+    #             a = tf.assign(a[i], tf.math.exp(tf.math.negative(self._beta) *
+    #                                             (self._event_times[i] - self._event_times[i - 1])) * (1. + a[i - 1]))
+    #
+    #             with tf.control_dependencies([a]):
+    #                 return [tf.add(i, 1), iters]
+    #
+    #         i = tf.constant(1, dtype=tf.int32)
+    #         iters = tf.constant(self._num_events)
+    #         i, _ = tf.while_loop(cond, body, [i, iters], name="compute_A", parallel_iterations=1)
+    #
+    #         with tf.variable_scope("hawkes_ll_first_term", reuse=tf.AUTO_REUSE):
+    #             a = tf.get_variable('a')
+    #
+    #         with tf.control_dependencies([i]):
+    #             first_term = tf.reduce_sum(tf.log(tf.add(self._bg_intensity, tf.multiply(self._alpha, a))))
+    #         return first_term
