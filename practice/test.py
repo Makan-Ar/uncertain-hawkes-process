@@ -16,17 +16,17 @@ hawkes_sim.end_time = run_time
 dt = 0.01
 hawkes_sim.track_intensity(dt)
 hawkes_sim.simulate()
-hawkes_event_times = np.float32(hawkes_sim.timestamps[0])
+hawkes_event_times = hawkes_sim.timestamps[0]
 
 intensity = 0.5
 alpha = 0.2
 beta = 3
-
+print()
 
 def hawkes_cum_log_likelihood(hawkes_event_times, intensity, alpha, beta):
     a_calc = np.zeros(len(hawkes_event_times))
     for i in range(1, len(hawkes_event_times)):
-        a_calc[i] = np.exp(-1 * beta * hawkes_event_times[i] - hawkes_event_times[i - 1]) * (1 + a_calc[i - 1])
+        a_calc[i] = np.exp(-1 * beta * (hawkes_event_times[i] - hawkes_event_times[i - 1])) * (1 + a_calc[i - 1])
     term1 = np.sum(np.log(intensity + alpha * a_calc))
 
     term2 = np.sum(intensity * hawkes_event_times)
@@ -49,23 +49,21 @@ def hawkes_cum_log_likelihood(hawkes_event_times, intensity, alpha, beta):
 
 
 ti = time.time()
-# term1, term2, term3, res = hawkes_cum_log_likelihood(hawkes_event_times, intensity, alpha, beta)
+term1, term2, term3, res = hawkes_cum_log_likelihood(hawkes_event_times, intensity, alpha, beta)
 j = time.time() - ti
 
-hawkes = hwk.Hawkes(hawkes_event_times, intensity, alpha, beta)
+hawkes = hwk.Hawkes(hawkes_event_times, intensity, alpha, beta, tf.float64)
+
 term1t, term2t, term3t, rest = hawkes.cum_log_likelihood()
 with tf.Session() as sess:
     writer = tf.summary.FileWriter('./graph-files/myg.g', sess.graph)
     sess.run(tf.global_variables_initializer())
     ti = time.time()
     print(sess.run([term1t, term2t, term3t, rest]))
-    # sess.run(a)
     jt = time.time() - ti
 
 writer.close()
 print(term1t, term2t, term3t, rest)
-# print(term1, term2, term3, res)
+print(term1, term2, term3, res)
 print(jt)
 print(j)
-
-# print(a_calc)
