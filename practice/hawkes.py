@@ -28,7 +28,7 @@ class Hawkes():
             self._alpha = tf.convert_to_tensor(alpha, name="alpha", dtype=_dtype)
             self._beta = tf.convert_to_tensor(beta, name="beta", dtype=_dtype)
 
-        self._num_events = len(event_times)
+        self._num_events = tf.size(self._event_times)
         self._dtype = _dtype
         self._graph_parents = [self._event_times, self._bg_intensity, self._alpha, self._beta]
         self._name = name
@@ -62,8 +62,8 @@ class Hawkes():
 
             nagtive_log_likelihood = term1 - term2 + term3
 
-            # return nagtive_log_likelihood
-            return term1, term2, term3, nagtive_log_likelihood
+            return nagtive_log_likelihood
+            # return term1, term2, term3, nagtive_log_likelihood
 
     def evaluate_first_term(self, name="evaluate_first_term"):
         with self._name_scope(name):
@@ -81,8 +81,8 @@ class Hawkes():
             first_term = tf.constant(0., dtype=self._dtype)
             prev_a_term = tf.constant(0., dtype=self._dtype)
             i = tf.constant(1, dtype=tf.int32)
-            iters = tf.constant(self._num_events)
-            first_term, prev_a_term, i, _ = tf.while_loop(cond, body, [first_term, prev_a_term, i, iters],
+            # iters = tf.constant(self._num_events)
+            first_term, prev_a_term, i, _ = tf.while_loop(cond, body, [first_term, prev_a_term, i, self._num_events],
                                                           name="compute_first_term", parallel_iterations=1)
 
             # Adding the k = 0 (based on 0 indexing) to the total
@@ -106,11 +106,12 @@ class Hawkes():
 
             kernel = tf.constant(0., dtype=self._dtype)
             i = tf.constant(1, dtype=tf.int32)
-            num_events = tf.constant(self._num_events)
-            kernel, i, _ = tf.while_loop(cond, body, [kernel, i, num_events], name="compute_kernel",
+            # num_events = tf.constant(self._num_events)
+            kernel, i, _ = tf.while_loop(cond, body, [kernel, i, self._num_events], name="compute_kernel",
                                          parallel_iterations=1)
 
-            kernel = tf.subtract(kernel, tf.cast(tf.divide(num_events * (num_events - 1), 2), dtype=self._dtype))
+            kernel = tf.subtract(kernel, tf.cast(tf.divide(self._num_events * (self._num_events - 1), 2),
+                                                 dtype=self._dtype))
             third_term = tf.multiply(tf.truediv(self._alpha, self._beta), kernel)
 
             return third_term
@@ -127,7 +128,8 @@ class Hawkes():
     # # Older implementation of term 1 calculation
     # def evaluate_first_term(self, name="evaluate_first_term"):
     #     with tf.variable_scope("hawkes_ll_first_term"):
-    #         a = tf.get_variable('a', [self._num_events], dtype=self._dtype, initializer=tf.zeros_initializer())
+    #         # a = tf.get_variable('a', [self._num_events], dtype=self._dtype, initializer=tf.zeros_initializer())
+    #         a = tf.get_variable('a', self._num_events, dtype=self._dtype, initializer=tf.zeros_initializer())
     #
     #     with self._name_scope(name, values=[a]):
     #         def cond(i, iters):
@@ -143,8 +145,8 @@ class Hawkes():
     #                 return [tf.add(i, 1), iters]
     #
     #         i = tf.constant(1, dtype=tf.int32)
-    #         iters = tf.constant(self._num_events)
-    #         i, _ = tf.while_loop(cond, body, [i, iters], name="compute_A", parallel_iterations=1)
+    #         # iters = tf.constant(self._num_events)
+    #         i, _ = tf.while_loop(cond, body, [i, self._num_events], name="compute_A", parallel_iterations=1)
     #
     #         with tf.variable_scope("hawkes_ll_first_term", reuse=tf.AUTO_REUSE):
     #             a = tf.get_variable('a', dtype=self._dtype)

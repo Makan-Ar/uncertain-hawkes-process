@@ -21,7 +21,7 @@ hawkes_event_times = hawkes_sim.timestamps[0]
 intensity = 0.5
 alpha = 0.2
 beta = 3
-print()
+
 
 def hawkes_cum_log_likelihood(hawkes_event_times, intensity, alpha, beta):
     a_calc = np.zeros(len(hawkes_event_times))
