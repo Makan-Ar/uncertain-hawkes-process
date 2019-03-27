@@ -49,7 +49,7 @@ class Hawkes():
     def beta(self):
         return self._beta
 
-    def cum_log_likelihood(self, name='cum_log_likelihood'):
+    def log_likelihood(self, name='log_likelihood'):
         # based on https://arxiv.org/abs/1507.02822 eq 21
         # full negative log likelihood is term 1 - term 2 + term 3
         # term 1: sum (i) from 0 to t(log(bg_intensity + alpha * sum (j) from 0 to (exp(-beta * (ti - tj))))
@@ -60,10 +60,10 @@ class Hawkes():
             term2 = self.evaluate_second_term()
             term3 = self.evaluate_third_term()
 
-            nagtive_log_likelihood = term1 - term2 + term3
+            log_likelihood = term1 - term2 + term3
 
-            return nagtive_log_likelihood
-            # return term1, term2, term3, nagtive_log_likelihood
+            return log_likelihood
+            # return term1, term2, term3, log_likelihood
 
     def evaluate_first_term(self, name="evaluate_first_term"):
         with self._name_scope(name):
@@ -92,29 +92,57 @@ class Hawkes():
 
     def evaluate_second_term(self, name="evaluate_second_term"):
         with self._name_scope(name):
-            return tf.multiply(self._bg_intensity, tf.reduce_sum(self._event_times))
+            return tf.multiply(self._bg_intensity, self._event_times[-1])
 
     def evaluate_third_term(self, name="evaluate_third_term"):
         with self._name_scope(name):
-            def cond(kernel, i, iters):
-                return tf.less(i, iters)
-
-            def body(kernel, i, iters):
-                kernel = tf.add(kernel, tf.reduce_sum(tf.exp(tf.negative(self._beta) *
-                                                             (self._event_times[i] - self._event_times[0:i]))))
-                return [kernel, tf.add(i, 1), iters]
-
-            kernel = tf.constant(0., dtype=self._dtype)
-            i = tf.constant(1, dtype=tf.int32)
-            # num_events = tf.constant(self._num_events)
-            kernel, i, _ = tf.while_loop(cond, body, [kernel, i, self._num_events], name="compute_kernel",
-                                         parallel_iterations=1)
-
-            kernel = tf.subtract(kernel, tf.cast(tf.divide(self._num_events * (self._num_events - 1), 2),
-                                                 dtype=self._dtype))
+            kernel = tf.subtract(
+                tf.reduce_sum(tf.exp(tf.negative(self._beta) * (self._event_times[-1] - self._event_times))),
+                tf.cast(self._num_events, dtype=self._dtype))
             third_term = tf.multiply(tf.truediv(self._alpha, self._beta), kernel)
-
             return third_term
+
+    # def cum_log_likelihood(self, name='cum_log_likelihood'):
+    #     # based on https://arxiv.org/abs/1507.02822 eq 21
+    #     # full negative log likelihood is term 1 - term 2 + term 3
+    #     # term 1: sum (i) from 0 to t(log(bg_intensity + alpha * sum (j) from 0 to (exp(-beta * (ti - tj))))
+    #     # term 2: bg_intensity * t
+    #     # term 3: (alpha / beta) * (-ind(t) + sum (i) from 0 to t (exp(-beta * (t - ti))))
+    #     with self._name_scope(name):
+    #         term1 = self.evaluate_first_term()
+    #         term2 = self.evaluate_cum_second_term()
+    #         term3 = self.evaluate_cum_third_term()
+    #
+    #         log_likelihood = term1 - term2 + term3
+    #
+    #         return nagtive_log_likelihood
+    #         # return term1, term2, term3, log_likelihood
+    #
+    # def evaluate_cum_second_term(self, name="evaluate_cum_second_term"):
+    #     with self._name_scope(name):
+    #         return tf.multiply(self._bg_intensity, tf.reduce_sum(self._event_times))
+    #
+    # def evaluate_cum_third_term(self, name="evaluate_cum_third_term"):
+    #     with self._name_scope(name):
+    #         def cond(kernel, i, iters):
+    #             return tf.less(i, iters)
+    #
+    #         def body(kernel, i, iters):
+    #             kernel = tf.add(kernel, tf.reduce_sum(tf.exp(tf.negative(self._beta) *
+    #                                                          (self._event_times[i] - self._event_times[0:i]))))
+    #             return [kernel, tf.add(i, 1), iters]
+    #
+    #         kernel = tf.constant(0., dtype=self._dtype)
+    #         i = tf.constant(1, dtype=tf.int32)
+    #         # num_events = tf.constant(self._num_events)
+    #         kernel, i, _ = tf.while_loop(cond, body, [kernel, i, self._num_events], name="compute_kernel",
+    #                                      parallel_iterations=1)
+    #
+    #         kernel = tf.subtract(kernel, tf.cast(tf.divide(self._num_events * (self._num_events - 1), 2),
+    #                                              dtype=self._dtype))
+    #         third_term = tf.multiply(tf.truediv(self._alpha, self._beta), kernel)
+    #
+    #         return third_term
 
     # Taken from tensorflow.probability distribution.py
     @contextlib.contextmanager

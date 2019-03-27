@@ -3,41 +3,39 @@ import numpy as np
 import hawkes as hwk
 import tensorflow as tf
 from tick.hawkes import SimuHawkesExpKernels
+import matplotlib.pyplot as plt
+from tick.plot import plot_point_process
+
+_intensity = 0.5
+_alpha = 0.9
+_beta = 5
 
 # Hawkes simulation
 n_nodes = 1  # dimension of the Hawkes process
-adjacency = 0.2 * np.ones((n_nodes, n_nodes))
-decays = 3 * np.ones((n_nodes, n_nodes))
-baseline = 0.5 * np.ones(n_nodes)
-hawkes_sim = SimuHawkesExpKernels(adjacency=adjacency, decays=decays, baseline=baseline, verbose=False)
+adjacency = _alpha * np.ones((n_nodes, n_nodes))
+decays = _beta * np.ones((n_nodes, n_nodes))
+baseline = _intensity * np.ones(n_nodes)
+hawkes_sim = SimuHawkesExpKernels(adjacency=adjacency, decays=decays, baseline=baseline, verbose=False, seed=458)
 
-run_time = 100000
+run_time = 10000
 hawkes_sim.end_time = run_time
 dt = 0.01
 hawkes_sim.track_intensity(dt)
 hawkes_sim.simulate()
 hawkes_event_times = hawkes_sim.timestamps[0]
-
-intensity = 0.5
-alpha = 0.2
-beta = 3
+print(len(hawkes_event_times))
+# plot_point_process(hawkes_sim, n_points=5000, t_min=1, max_jumps=200)
+# plt.show()
 
 
 def hawkes_cum_log_likelihood(hawkes_event_times, intensity, alpha, beta):
     a_calc = np.zeros(len(hawkes_event_times))
     for i in range(1, len(hawkes_event_times)):
         a_calc[i] = np.exp(-1 * beta * (hawkes_event_times[i] - hawkes_event_times[i - 1])) * (1 + a_calc[i - 1])
+
     term1 = np.sum(np.log(intensity + alpha * a_calc))
 
     term2 = np.sum(intensity * hawkes_event_times)
-
-    # ker = 0
-    # for k in range(0, len(hawkes_event_times)):
-    #     temp_ker = 0
-    #     for i in range(k + 1):
-    #         temp_ker += np.exp(-1 * beta * (hawkes_event_times[k] - hawkes_event_times[i])) - 1
-    #     ker += temp_ker
-    # term3 = (alpha / beta) * ker
 
     ker_ = 0
     for k in range(1, len(hawkes_event_times)):
@@ -45,25 +43,68 @@ def hawkes_cum_log_likelihood(hawkes_event_times, intensity, alpha, beta):
     term3 = (alpha / beta) * ker_
 
     res = term1 - term2 + term3
-    return term1, term2, term3, res
+    return res
+    # return term1, -1 * term2, term3, res
 
+
+def hawkes_log_likelihood(hawkes_event_times, intensity, alpha, beta):
+    a_calc = np.zeros(len(hawkes_event_times))
+    for i in range(1, len(hawkes_event_times)):
+        a_calc[i] = np.exp(-1 * beta * (hawkes_event_times[i] - hawkes_event_times[i - 1])) * (1 + a_calc[i - 1])
+
+    term1 = np.sum(np.log(intensity + alpha * a_calc))
+
+    term2 = intensity * hawkes_event_times[-1]
+
+    ker_ = np.sum(np.exp(-1 * beta * (hawkes_event_times[-1] - hawkes_event_times))) - len(hawkes_event_times)
+    term3 = (alpha / beta) * ker_
+
+    res = term1 - term2 + term3
+    # return res
+    return term1, -1 * term2, term3, res
+
+alpha_test = 0.9
+
+# for i in [10, 2, 1.7,  1.5, 0.9, 0.5, 0.1]:
+#     ti = time.time()
+#     print(i)
+#     res = hawkes_log_likelihood(hawkes_event_times, _intensity, i, _beta)
+#     j = time.time() - ti
+#     print(res)
+
+# print()
+# result = []
+# for i in np.arange(0, 3, 0.1):
+#     result.append(hawkes_log_likelihood(hawkes_event_times, _intensity, i, _beta))
+#     print(i, end='\r')
+#
+# print()
+# plt.plot(np.arange(0, 3, 0.1), result, c='red')
+# plt.axvline(x=_alpha)
+# # plt.xlabel("Steps")
+# # plt.ylim(0, 1)
+# # plt.legend()
+# plt.show()
+
+event_times = tf.convert_to_tensor(hawkes_event_times, name="event_times_data", dtype=tf.float64)
 
 ti = time.time()
-term1, term2, term3, res = hawkes_cum_log_likelihood(hawkes_event_times, intensity, alpha, beta)
+res = hawkes_log_likelihood(hawkes_event_times, _intensity, alpha_test, _beta)
 j = time.time() - ti
 
-hawkes = hwk.Hawkes(hawkes_event_times, intensity, alpha, beta, tf.float64)
+hawkes = hwk.Hawkes(event_times, _intensity, alpha_test, _beta, tf.float64)
+rest = hawkes.log_likelihood()
 
-term1t, term2t, term3t, rest = hawkes.cum_log_likelihood()
 with tf.Session() as sess:
     writer = tf.summary.FileWriter('./graph-files/myg.g', sess.graph)
     sess.run(tf.global_variables_initializer())
+    sess.run(tf.local_variables_initializer())
     ti = time.time()
-    print(sess.run([term1t, term2t, term3t, rest]))
+    print(sess.run([rest]))
     jt = time.time() - ti
 
 writer.close()
-print(term1t, term2t, term3t, rest)
-print(term1, term2, term3, res)
+print(rest)
+print(res)
 print(jt)
 print(j)
