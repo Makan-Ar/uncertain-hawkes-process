@@ -31,7 +31,17 @@ import matplotlib.pyplot as plt
 # print(autograph.to_code(term1_a))
 
 
-a = tf.exp(tf.negative(tf.to_float(3)) * tf.to_float(0))
+# a = tf.exp(tf.negative(tf.to_float(3)) * tf.to_float(0))
+
+a = tf.random_uniform([5], 0, 1)
+# g = tf.reshape(a, [5, 1])
+# b = tf.reshape(tf.tile(a, [5]), [5, 5])
+# c = tf.matrix_band_part(b[:-1], -1, 0)
+# d = tf.reduce_sum(c, axis=1)
+
+b = tf.get_variable('a', tf.shape(a), dtype=tf.float32, initializer=tf.zeros_initializer())
 
 with tf.Session() as sess:
-    print(sess.run(a))
+    sess.run(tf.global_variables_initializer())
+    sess.run(tf.initialize_local_variables())
+    print(sess.run([a, b]))

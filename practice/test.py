@@ -8,14 +8,14 @@ from tick.plot import plot_point_process
 
 _intensity = 0.5
 _alpha = 0.9
-_beta = 5
+_beta = 2
 
 # Hawkes simulation
 n_nodes = 1  # dimension of the Hawkes process
 adjacency = _alpha * np.ones((n_nodes, n_nodes))
 decays = _beta * np.ones((n_nodes, n_nodes))
 baseline = _intensity * np.ones(n_nodes)
-hawkes_sim = SimuHawkesExpKernels(adjacency=adjacency, decays=decays, baseline=baseline, verbose=False, seed=458)
+hawkes_sim = SimuHawkesExpKernels(adjacency=adjacency, decays=decays, baseline=baseline, verbose=False, seed=435)
 
 run_time = 10000
 hawkes_sim.end_time = run_time
@@ -60,8 +60,8 @@ def hawkes_log_likelihood(hawkes_event_times, intensity, alpha, beta):
     term3 = (alpha / beta) * ker_
 
     res = term1 - term2 + term3
-    # return res
-    return term1, -1 * term2, term3, res
+    return res
+    # return term1, -1 * term2, term3, res
 
 alpha_test = 0.9
 
@@ -73,38 +73,38 @@ alpha_test = 0.9
 #     print(res)
 
 # print()
-# result = []
-# for i in np.arange(0, 3, 0.1):
-#     result.append(hawkes_log_likelihood(hawkes_event_times, _intensity, i, _beta))
-#     print(i, end='\r')
+result = []
+for i in np.arange(0, 12, 0.1):
+    result.append(hawkes_log_likelihood(hawkes_event_times, _intensity, i, _beta))
+    print(i, end='\r')
+
+print()
+plt.plot(np.arange(0, 12, 0.1), result, c='red')
+plt.axvline(x=_alpha)
+# plt.xlabel("Steps")
+# plt.ylim(0, 1)
+# plt.legend()
+plt.show()
+
+# event_times = tf.convert_to_tensor(hawkes_event_times, name="event_times_data", dtype=tf.float32)
 #
-# print()
-# plt.plot(np.arange(0, 3, 0.1), result, c='red')
-# plt.axvline(x=_alpha)
-# # plt.xlabel("Steps")
-# # plt.ylim(0, 1)
-# # plt.legend()
-# plt.show()
-
-event_times = tf.convert_to_tensor(hawkes_event_times, name="event_times_data", dtype=tf.float64)
-
-ti = time.time()
-res = hawkes_log_likelihood(hawkes_event_times, _intensity, alpha_test, _beta)
-j = time.time() - ti
-
-hawkes = hwk.Hawkes(event_times, _intensity, alpha_test, _beta, tf.float64)
-rest = hawkes.log_likelihood()
-
-with tf.Session() as sess:
-    writer = tf.summary.FileWriter('./graph-files/myg.g', sess.graph)
-    sess.run(tf.global_variables_initializer())
-    sess.run(tf.local_variables_initializer())
-    ti = time.time()
-    print(sess.run([rest]))
-    jt = time.time() - ti
-
-writer.close()
-print(rest)
-print(res)
-print(jt)
-print(j)
+# ti = time.time()
+# res = hawkes_log_likelihood(hawkes_event_times, _intensity, alpha_test, _beta)
+# j = time.time() - ti
+#
+# hawkes = hwk.Hawkes(event_times, _intensity, alpha_test, _beta, tf.float32)
+# rest = hawkes.log_likelihood()
+#
+# with tf.Session() as sess:
+#     writer = tf.summary.FileWriter('./graph-files/myg.g', sess.graph)
+#     sess.run(tf.global_variables_initializer())
+#     sess.run(tf.local_variables_initializer())
+#     ti = time.time()
+#     print(sess.run([rest]))
+#     jt = time.time() - ti
+#
+# writer.close()
+# print(rest)
+# print(res)
+# print(jt)
+# print(j)
