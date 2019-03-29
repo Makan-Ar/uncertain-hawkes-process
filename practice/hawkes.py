@@ -90,6 +90,56 @@ class Hawkes():
 
             return first_term
 
+    # Older implementation of term 1 calculation
+    def evaluate_first_term_with_a_term_tensor(self, name="evaluate_first_term_with_a_term_tensor"):
+        with tf.variable_scope("hawkes_ll_first_term"):
+            # a = tf.get_variable('a', [self._num_events], dtype=self._dtype, initializer=tf.zeros_initializer())
+            a = tf.get_variable('a', tf.shape(self._event_times), dtype=self._dtype, initializer=tf.zeros_initializer())
+
+        with self._name_scope(name, values=[a]):
+            def cond(i, iters):
+                return tf.less(i, iters)
+
+            def body(i, iters):
+                with tf.variable_scope("hawkes_ll_first_term", reuse=tf.AUTO_REUSE):
+                    a = tf.get_variable('a', dtype=self._dtype)
+                a = tf.assign(a[i], tf.math.exp(tf.math.negative(self._beta) *
+                                                (self._event_times[i] - self._event_times[i - 1])) * (1. + a[i - 1]))
+
+                with tf.control_dependencies([a]):
+                    return [tf.add(i, 1), iters]
+
+            i = tf.constant(1, dtype=tf.int32)
+            i, _ = tf.while_loop(cond, body, [i, self._num_events], name="compute_A", parallel_iterations=1)
+
+            with tf.variable_scope("hawkes_ll_first_term", reuse=tf.AUTO_REUSE):
+                a = tf.get_variable('a', dtype=self._dtype)
+
+            with tf.control_dependencies([i]):
+                first_term = tf.reduce_sum(tf.log(tf.add(self._bg_intensity, tf.multiply(self._alpha, a))))
+            return first_term
+
+    def evaluate_first_term_no_loop(self, name="evaluate_first_term_no_loop"):
+        with self._name_scope(name):
+
+            a_term_exp = tf.exp(tf.negative(self._beta) * (self._event_times[1:] - self._event_times[:-1]))
+
+            # exp ^ (beta * t) of t_0 to t_k-1
+            arrivals_repeat = tf.reshape(tf.tile(self._event_times[:-1], [self._num_events - 1]),
+                                         [self._num_events - 1, self._num_events - 1])
+            interarrivals_repeat = tf.subtract(tf.reshape(self._event_times[:-1], [self._num_events - 1, 1]),
+                                               arrivals_repeat)
+            e_beta_repeat = tf.exp(tf.multiply(tf.negative(self._beta), interarrivals_repeat))
+            e_beta_repeat_lower_tri = tf.matrix_band_part(e_beta_repeat, -1, 0)
+            a_term_sum = tf.reduce_sum(e_beta_repeat_lower_tri, axis=1)
+            a_term = tf.multiply(a_term_exp, a_term_sum, name='a_term')
+
+            first_term = tf.reduce_sum(tf.log(tf.add(self._bg_intensity, tf.multiply(self._alpha, a_term))))
+            # Adding the k = 0 (based on 0 indexing) to the total
+            first_term = tf.add(first_term, tf.log(self._bg_intensity), name='first_term')
+
+            return first_term
+
     def evaluate_second_term(self, name="evaluate_second_term"):
         with self._name_scope(name):
             return tf.multiply(self._bg_intensity, self._event_times[-1])
@@ -101,6 +151,15 @@ class Hawkes():
                 tf.cast(self._num_events, dtype=self._dtype))
             third_term = tf.multiply(tf.truediv(self._alpha, self._beta), kernel)
             return third_term
+
+    # Taken from tensorflow.probability distribution.py
+    @contextlib.contextmanager
+    def _name_scope(self, name=None, values=None):
+        """Helper function to standardize op scope."""
+        with tf.name_scope(self._name):
+            with tf.name_scope(name, values=(
+                    ([] if values is None else values) + self._graph_parents)) as scope:
+                yield scope
 
     # def cum_log_likelihood(self, name='cum_log_likelihood'):
     #     # based on https://arxiv.org/abs/1507.02822 eq 21
@@ -143,42 +202,3 @@ class Hawkes():
     #         third_term = tf.multiply(tf.truediv(self._alpha, self._beta), kernel)
     #
     #         return third_term
-
-    # Taken from tensorflow.probability distribution.py
-    @contextlib.contextmanager
-    def _name_scope(self, name=None, values=None):
-        """Helper function to standardize op scope."""
-        with tf.name_scope(self._name):
-            with tf.name_scope(name, values=(
-                    ([] if values is None else values) + self._graph_parents)) as scope:
-                yield scope
-
-    # # Older implementation of term 1 calculation
-    # def evaluate_first_term(self, name="evaluate_first_term"):
-    #     with tf.variable_scope("hawkes_ll_first_term"):
-    #         # a = tf.get_variable('a', [self._num_events], dtype=self._dtype, initializer=tf.zeros_initializer())
-    #         a = tf.get_variable('a', self._num_events, dtype=self._dtype, initializer=tf.zeros_initializer())
-    #
-    #     with self._name_scope(name, values=[a]):
-    #         def cond(i, iters):
-    #             return tf.less(i, iters)
-    #
-    #         def body(i, iters):
-    #             with tf.variable_scope("hawkes_ll_first_term", reuse=tf.AUTO_REUSE):
-    #                 a = tf.get_variable('a', dtype=self._dtype)
-    #             a = tf.assign(a[i], tf.math.exp(tf.math.negative(self._beta) *
-    #                                             (self._event_times[i] - self._event_times[i - 1])) * (1. + a[i - 1]))
-    #
-    #             with tf.control_dependencies([a]):
-    #                 return [tf.add(i, 1), iters]
-    #
-    #         i = tf.constant(1, dtype=tf.int32)
-    #         # iters = tf.constant(self._num_events)
-    #         i, _ = tf.while_loop(cond, body, [i, self._num_events], name="compute_A", parallel_iterations=1)
-    #
-    #         with tf.variable_scope("hawkes_ll_first_term", reuse=tf.AUTO_REUSE):
-    #             a = tf.get_variable('a', dtype=self._dtype)
-    #
-    #         with tf.control_dependencies([i]):
-    #             first_term = tf.reduce_sum(tf.log(tf.add(self._bg_intensity, tf.multiply(self._alpha, a))))
-    #         return first_term
