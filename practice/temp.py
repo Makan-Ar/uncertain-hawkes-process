@@ -3,6 +3,9 @@ from __future__ import division, print_function, absolute_import
 import tensorflow as tf
 layers = tf.keras.layers
 from tensorflow import contrib
+import tensorflow_probability as tfp
+tfd = tfp.distributions
+
 autograph = contrib.autograph
 
 import numpy as np
@@ -45,3 +48,10 @@ with tf.Session() as sess:
     sess.run(tf.global_variables_initializer())
     sess.run(tf.initialize_local_variables())
     print(sess.run([a, b]))
+
+
+rv_prob = tfd.Uniform(0., 1., name='p')
+tfd.Poisson
+sample_prob_2 = tf.subtract(1., .25, name='p2')
+stacked_p_rv = tf.stack([.25, sample_prob_2], name='p_stacked')
+rv_assignments = tfd.Categorical(probs=stacked_p_rv, name='assignments')

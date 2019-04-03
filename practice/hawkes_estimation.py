@@ -11,8 +11,8 @@ tfd = tfp.distributions
 plot_base_path = '/shared/Results/HawkesUncertainEvents/temp'
 
 _intensity = 0.5
-_alpha = 0.9
 _beta = 2
+_alpha = 0.9 / _beta
 
 # Hawkes simulation
 n_nodes = 1  # dimension of the Hawkes process
@@ -28,15 +28,14 @@ hawkes_sim.track_intensity(dt)
 hawkes_sim.simulate()
 hawkes_event_times = hawkes_sim.timestamps[0]
 
-
 event_times = tf.convert_to_tensor(hawkes_event_times, name="event_times_data", dtype=tf.float32)
 
-# rv_test = hwk.Hawkes(event_times, _intensity, 0.9, _beta, tf.float32, name="hawkes_observations")
-# a = rv_test.log_likelihood()
+# rv_test = hwk.Hawkes(_intensity, 0.9, _beta, tf.float32, name="hawkes_observations")
+# a = rv_test.log_likelihood(event_times)
 # # [-1641056.5, -1043076.0]
 #
-# rv_test_1 = hwk.Hawkes(event_times, _intensity, 9, _beta, tf.float32, name="hawkes_observations_1")
-# b = rv_test_1.log_likelihood()
+# rv_test_1 = hwk.Hawkes(_intensity, 9, _beta, tf.float32, name="hawkes_observations_1")
+# b = rv_test_1.log_likelihood(event_times)
 #
 # with tf.Session() as sess:
 #     sess.run(tf.global_variables_initializer())
@@ -48,11 +47,11 @@ def joint_log_prob_alpha(data, sample_alpha):
     # rv_alpha = tfd.Uniform(0., 1., name='alpha_prior_rv')
     rv_alpha = tfd.Exponential(rate=0.01, name='alpha_prior_rv')
 
-    rv_observations = hwk.Hawkes(data, _intensity, _alpha, sample_alpha, tf.float32, name="hawkes_observations_rv")
+    rv_observations = hwk.Hawkes(_intensity, _alpha, sample_alpha, tf.float32, name="hawkes_observations_rv")
 
     return (
         rv_alpha.log_prob(sample_alpha) +
-        rv_observations.log_likelihood()
+        rv_observations.log_likelihood(data)
     )
 
 
@@ -60,12 +59,12 @@ def joint_log_prob_alpha_beta(data, sample_alpha, sample_beta):
     rv_alpha = tfd.Exponential(rate=0.01, name='alpha_prior_rv')
     rv_beta = tfd.Exponential(rate=0.01, name='beta_prior_rv')
 
-    rv_observations = hwk.Hawkes(data, _intensity, sample_alpha, sample_beta, tf.float32, name="hawkes_observations_rv")
+    rv_observations = hwk.Hawkes(_intensity, sample_alpha, sample_beta, tf.float32, name="hawkes_observations_rv")
 
     return (
         rv_alpha.log_prob(sample_alpha) +
         rv_beta.log_prob(sample_beta) +
-        rv_observations.log_likelihood()
+        rv_observations.log_likelihood(data)
     )
 
 
@@ -74,21 +73,21 @@ def joint_log_prob_all(data, sample_alpha, sample_beta, sample_intensity):
     rv_beta = tfd.Exponential(rate=0.01, name='beta_prior_rv')
     rv_intensity = tfd.Exponential(rate=0.01, name='intensity_prior_rv')
 
-    rv_observations = hwk.Hawkes(data, sample_intensity, sample_alpha, sample_beta, tf.float32, name="hawkes_observations_rv")
+    rv_observations = hwk.Hawkes(sample_intensity, sample_alpha, sample_beta, tf.float32, name="hawkes_observations_rv")
 
     return (
         rv_alpha.log_prob(sample_alpha) +
         rv_beta.log_prob(sample_beta) +
         rv_intensity.log_prob(sample_intensity) +
-        rv_observations.log_likelihood()
+        rv_observations.log_likelihood(data)
     )
 
 # estimate_param = 'alpha'
 # estimate_param = 'alpha_beta'
 estimate_param = 'all'
 
-number_of_steps = 25000
-burnin = 2500
+number_of_steps = 2500
+burnin = 250
 
 # set the chain's initial state & define closure over our joint_log_prob
 if estimate_param == 'alpha':
