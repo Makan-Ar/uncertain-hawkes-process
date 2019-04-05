@@ -3,7 +3,6 @@ from __future__ import division, print_function, absolute_import
 """The Hawkes process class."""
 
 import contextlib
-import numpy as np
 import tensorflow as tf
 import tensorflow_probability as tfp
 from tensorflow_probability.python.internal import dtype_util
@@ -57,7 +56,7 @@ class Hawkes(tfp.distributions.Distribution):
 
     def log_likelihood(self, event_times, name='log_likelihood'):
         # based on https://arxiv.org/abs/1507.02822 eq 21
-        # full negative log likelihood is term 1 - term 2 + term 3
+        # full log likelihood is term 1 - term 2 + term 3
         # term 1: sum (i) from 0 to t(log(bg_intensity + alpha * sum (j) from 0 to (exp(-beta * (ti - tj))))
         # term 2: bg_intensity * t
         # term 3: (alpha / beta) * (-ind(t) + sum (i) from 0 to t (exp(-beta * (t - ti))))
@@ -70,8 +69,8 @@ class Hawkes(tfp.distributions.Distribution):
 
             log_likelihood = term1 - term2 + term3
 
-            return log_likelihood
-            # return term1, term2, term3, log_likelihood
+            # return log_likelihood
+            return term1, term2, term3, log_likelihood
 
     def evaluate_first_term(self, event_times):
         def cond(first_term, prev_a_term, i, iters):
@@ -149,7 +148,7 @@ class Hawkes(tfp.distributions.Distribution):
     def evaluate_third_term(self, event_times):
         kernel = tf.subtract(
             tf.reduce_sum(tf.exp(tf.negative(self._beta) * (event_times[-1] - event_times))),
-            tf.cast(tf.shape(event_times), dtype=self._dtype))
+            tf.cast(tf.size(event_times), dtype=self._dtype))
         third_term = tf.multiply(tf.truediv(self._alpha, self._beta), kernel)
         return third_term
 
