@@ -20,22 +20,22 @@ class HawkesUncertainModel:
     mixed_labels = None
     noise_percentage = None
 
-    def __init__(self, h_lambda, h_alpha, h_beta, h_exp_beta,
-                 p_lambda, p_exp_beta,
+    def __init__(self, h_lambda, h_alpha, h_beta, h_exp_rate,
+                 p_lambda, p_exp_rate,
                  run_time=100, delta=0.4, noise_percentage_ub=0.5, seed=None):
         self.run_time = run_time
         self.delta = delta
 
         self.h_lambda = h_lambda
-        self.h_alpha = h_alpha
+        self.h_alpha = h_alpha / h_beta
         self.h_beta = h_beta
         self.p_lambda = p_lambda
-        self.h_exp_beta = h_exp_beta
-        self.p_exp_beta = p_exp_beta
+        self.h_exp_rate = h_exp_rate
+        self.p_exp_rate = p_exp_rate
 
         # Simulate Hawkes Process
         adjacency = self.h_alpha * np.ones((self.n_nodes, self.n_nodes))  # alpha (intensities)
-        decays = self.h_alpha * np.ones((self.n_nodes, self.n_nodes))  # beta
+        decays = self.h_beta * np.ones((self.n_nodes, self.n_nodes))  # beta
         baseline = self.h_lambda * np.ones(self.n_nodes)  # Baseline intensities of Hawkes processes
 
         sim_cnt = 0
@@ -72,8 +72,8 @@ class HawkesUncertainModel:
         self.mixed_timestamps = self.mixed_timestamps[sort_ind]
 
         # Simulate two exponential distribution as side information
-        self.hawkes_exp = np.random.exponential(1. / self.h_exp_beta, self.hawkes.n_total_jumps)
-        self.poisson_exp = np.random.exponential(1. / self.p_exp_beta, self.poisson.n_total_jumps)
+        self.hawkes_exp = np.random.exponential(1. / self.h_exp_rate, self.hawkes.n_total_jumps)
+        self.poisson_exp = np.random.exponential(1. / self.p_exp_rate, self.poisson.n_total_jumps)
 
         # mixed exponential
         self.mixed_expo = np.concatenate((self.hawkes_exp, self.poisson_exp), axis=0)
@@ -96,9 +96,9 @@ class HawkesUncertainModel:
     def plot_hawkes_uncertain(self):
         plt.scatter(self.hawkes.timestamps, self.hawkes_exp, c='blue',
                     label='Hawkes(alpha:{}, beta:{}, lambda:{}) w/ exp({})'.format(self.h_alpha, self.h_beta,
-                                                                                   self.h_lambda, self.h_exp_beta))
+                                                                                   self.h_lambda, self.h_exp_rate))
         plt.scatter(self.poisson.timestamps, self.poisson_exp, c='red',
-                    label="Poisson(lambda: {}) w/ exp({})".format(self.p_lambda, self.p_exp_beta))
+                    label="Poisson(lambda: {}) w/ exp({})".format(self.p_lambda, self.p_exp_rate))
         # plt.legend(bbox_to_anchor=(0., 1.02, 1., .102), loc=3, ncol=1, mode="expand", borderaxespad=0.)
         plt.legend()
         plt.xlabel("Time")
