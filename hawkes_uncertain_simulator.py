@@ -6,7 +6,7 @@ from tick.plot import plot_point_process
 
 # A uni-dimension Hawkes Process model, combined with a Poisson process as the uncertain events
 class HawkesUncertainModel:
-    n_nodes = 1 # fix Hawkes process dimension to 1
+    n_nodes = 1  # fix Hawkes process dimension to 1
     run_time = None
     delta = None
 
@@ -15,7 +15,16 @@ class HawkesUncertainModel:
     poisson = None
     poisson_exp = None
 
-    def __init__(self, h_lambda, h_alpha, h_beta, h_exp_beta, p_lambda, p_exp_beta, run_time=100, delta=0.4, seed=None):
+    mixed_expo = None
+    mixed_timestamps = None
+    mixed_labels = None
+
+    down_sampled_poisson_events = None
+    noise_percentage = None
+
+    def __init__(self, h_lambda, h_alpha, h_beta, h_exp_beta,
+                 p_lambda, p_exp_beta,
+                 run_time=100, delta=0.4, noise_percentage_ub=0.5, seed=None):
         self.run_time = run_time
         self.delta = delta
 
@@ -37,12 +46,47 @@ class HawkesUncertainModel:
         self.hawkes.simulate()
 
         # Simulate Poisson Process
-        self.poisson = SimuPoissonProcess(self.p_lambda, end_time=run_time, verbose=False)
+        self.poisson = SimuPoissonProcess(self.p_lambda, end_time=run_time, verbose=False, seed=seed)
         self.poisson.simulate()
 
+        # Make sure there are no two events happening at the same time
+        # np.intersect1d(self.hawkes.timestamps[0], self.poisson.timestamps[0], )
+
+        # check if need to down sample poisson to noise_percentage_ub
+        needs_down_sampling = self.poisson.n_total_jumps / (self.poisson.n_total_jumps
+                                                            + self.hawkes.n_total_jumps) > noise_percentage_ub
+
+        if needs_down_sampling:
+            self.down_sampled_poisson_events = np.random.choice(self.poisson.timestamps[0],
+                                                                int(self.hawkes.n_total_jumps * noise_percentage_ub),
+                                                                replace=False)
+
+        # mixed processes
+        if needs_down_sampling:
+            self.mixed_timestamps = np.concatenate((self.hawkes.timestamps[0], self.down_sampled_poisson_events))
+        else:
+            self.mixed_timestamps = np.concatenate((self.hawkes.timestamps[0], self.poisson.timestamps[0]))
+
+        sort_ind = np.argsort(self.mixed_timestamps)
+        self.mixed_timestamps = self.mixed_timestamps[sort_ind]
+
         # Simulate two exponential distribution as side information
-        self.hawkes_exp = np.random.exponential(self.h_exp_beta, self.hawkes.n_total_jumps)
-        self.poisson_exp = np.random.exponential(self.p_exp_beta, self.poisson.n_total_jumps)
+        self.hawkes_exp = np.random.exponential(1. / self.h_exp_beta, self.hawkes.n_total_jumps)
+        if needs_down_sampling:
+            self.poisson_exp = np.random.exponential(1. / self.p_exp_beta, len(self.down_sampled_poisson_events))
+        else:
+            self.poisson_exp = np.random.exponential(1. / self.p_exp_beta, self.poisson.n_total_jumps)
+
+        # mixed exponential
+        self.mixed_expo = np.concatenate((self.hawkes_exp, self.poisson_exp), axis=0)
+        self.mixed_expo = self.mixed_expo[sort_ind]
+
+        # mixed labels. Poisson = 1, Hawkes = 0
+        self.mixed_labels = np.concatenate((np.zeros(len(self.hawkes_exp), dtype=int),
+                                            np.ones(len(self.poisson_exp), dtype=int)), axis=0)
+        self.mixed_labels = self.mixed_labels[sort_ind]
+
+        self.noise_percentage = np.sum(self.mixed_labels) / len(self.mixed_labels)
 
     def plot_hawkes(self, n_points=50000, t_min=1, max_jumps=200):
         plot_point_process(self.hawkes, n_points=n_points, t_min=t_min, max_jumps=max_jumps)
