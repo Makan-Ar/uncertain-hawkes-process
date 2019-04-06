@@ -69,8 +69,8 @@ class Hawkes(tfp.distributions.Distribution):
 
             log_likelihood = term1 - term2 + term3
 
-            # return log_likelihood
-            return term1, term2, term3, log_likelihood
+            return log_likelihood
+            # return term1, term2, term3, log_likelihood
 
     def evaluate_first_term(self, event_times):
         def cond(first_term, prev_a_term, i, iters):

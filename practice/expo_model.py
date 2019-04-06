@@ -37,6 +37,28 @@ with tf.Session() as sess:
 # plt.show()
 
 
+def joint_log_prob_dirichlet(data, sample_prob_1, sample_rates):
+    rv_pi = tfd.Dirichlet([0.5, 0.5], name='pi')
+
+    sample_prob_2 = tf.subtract(1., sample_prob_1)
+    stacked_p_rv = tf.stack([sample_prob_1, sample_prob_2], name='p_stacked')
+
+    rv_assignments = tfd.Categorical(probs=stacked_p_rv, name='assignments')
+
+    # rv_rates = tfd.Uniform(low=[0.001, 0.001], high=[100., 100.], name="rates_prior_rv")
+    rv_rates = tfd.Gamma(concentration=[0.001, 0.001], rate=[0.001, 0.001], name="rates_prior_rv")
+    rv_observation = tfd.MixtureSameFamily(
+        mixture_distribution=rv_assignments,
+        components_distribution=tfd.Exponential(rate=1 / sample_rates)
+    )
+
+    return (
+        rv_pi.log_prob(stacked_p_rv) +
+        tf.reduce_sum(rv_rates.log_prob(sample_rates)) +
+        tf.reduce_sum(rv_observation.log_prob(data))
+    )
+
+
 def joint_log_prob_with_uniform_priors(data, sample_prob_1, sample_rates):
     rv_prob = tfd.Uniform(0., 1., name='p')
 
@@ -83,7 +105,7 @@ def joint_log_prob_with_gamma_priors(data, sample_prob_1, sample_rates):
 # MCMC
 is_prior_gamma = True
 
-number_of_steps = 1000000
+number_of_steps = 25000
 burnin = 2500
 
 # set the chain's initial state
@@ -99,7 +121,8 @@ unconstraining_bijectors = [
 
 # define closure over our joint_log_prob
 if is_prior_gamma:
-    unnormalized_posterior_log_prob = lambda *args: joint_log_prob_with_gamma_priors(dataset, *args)
+    # unnormalized_posterior_log_prob = lambda *args: joint_log_prob_with_gamma_priors(dataset, *args)
+    unnormalized_posterior_log_prob = lambda *args: joint_log_prob_dirichlet(dataset, *args)
 else:
     unnormalized_posterior_log_prob = lambda *args: joint_log_prob_with_uniform_priors(dataset, *args)
 

@@ -67,15 +67,15 @@ def joint_log_prob(events_t, events_info, sample_alpha, sample_beta, sample_inte
     )
 
 
-number_of_steps = 25000
-burnin = 2500
+number_of_steps = 2500
+burnin = 250
 
 # set the chain's initial state & define closure over our joint_log_prob
 initial_chain_state = [
     tf.constant(0.5, name="init_alpha"),
     tf.constant(0.5, name="init_beta"),
     tf.constant(0.5, name="init_intensity"),
-    tf.constant(0.5, name='init_rate')
+    tf.constant(0.5, name='init_rate'),
 ]
 
 unconstraining_bijectors = [
@@ -121,9 +121,10 @@ hmc = tfp.mcmc.TransformedTransitionKernel(
     kernel=hmc
 )
 
+gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.5)
 
 tic = time.time()
-with tf.Session() as sess:
+with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)) as sess:
     sess.run(tf.global_variables_initializer())
     sess.run(tf.local_variables_initializer())
 

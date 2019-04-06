@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import tensorflow_probability as tfp
 from tick.hawkes import SimuHawkesExpKernels
 
+
 tfd = tfp.distributions
 
 plot_base_path = '/shared/Results/HawkesUncertainEvents/temp'

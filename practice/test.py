@@ -105,7 +105,7 @@ with tf.Session() as sess:
     sess.run(tf.global_variables_initializer())
     sess.run(tf.local_variables_initializer())
     ti = time.time()
-    print(sess.run([rest]))
+    print(sess.run(rest))
     jt = time.time() - ti
 
 writer.close()
