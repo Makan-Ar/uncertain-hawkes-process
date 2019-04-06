@@ -18,8 +18,6 @@ class HawkesUncertainModel:
     mixed_expo = None
     mixed_timestamps = None
     mixed_labels = None
-
-    down_sampled_poisson_events = None
     noise_percentage = None
 
     def __init__(self, h_lambda, h_alpha, h_beta, h_exp_beta,
@@ -39,43 +37,43 @@ class HawkesUncertainModel:
         adjacency = self.h_alpha * np.ones((self.n_nodes, self.n_nodes))  # alpha (intensities)
         decays = self.h_alpha * np.ones((self.n_nodes, self.n_nodes))  # beta
         baseline = self.h_lambda * np.ones(self.n_nodes)  # Baseline intensities of Hawkes processes
-        self.hawkes = SimuHawkesExpKernels(adjacency=adjacency, decays=decays, baseline=baseline, verbose=False,
-                                           seed=seed)
-        self.hawkes.end_time = self.run_time
-        self.hawkes.track_intensity(self.delta)
-        self.hawkes.simulate()
 
-        # Simulate Poisson Process
-        self.poisson = SimuPoissonProcess(self.p_lambda, end_time=run_time, verbose=False, seed=seed)
-        self.poisson.simulate()
+        sim_cnt = 0
+        max_num_sim = 500
+        while sim_cnt < max_num_sim:
+            self.hawkes = SimuHawkesExpKernels(adjacency=adjacency, decays=decays, baseline=baseline, verbose=False,
+                                               seed=seed)
+            self.hawkes.end_time = self.run_time
+            self.hawkes.track_intensity(self.delta)
+            self.hawkes.simulate()
 
-        # Make sure there are no two events happening at the same time
-        # np.intersect1d(self.hawkes.timestamps[0], self.poisson.timestamps[0], )
+            # Simulate Poisson Process
+            self.poisson = SimuPoissonProcess(self.p_lambda, end_time=run_time, verbose=False, seed=seed)
+            self.poisson.simulate()
 
-        # check if need to down sample poisson to noise_percentage_ub
-        needs_down_sampling = self.poisson.n_total_jumps / (self.poisson.n_total_jumps
-                                                            + self.hawkes.n_total_jumps) > noise_percentage_ub
+            # Accept a sim if neither of the sims are empty, and
+            # no two events happen at the same time, and
+            # noise_percentage_ub is not violated
+            if (len(self.hawkes.timestamps[0]) > 0 and len(self.poisson.timestamps[0]) > 0 and
+                len(np.intersect1d(self.hawkes.timestamps[0], self.poisson.timestamps[0], assume_unique=True)) == 0 and
+                self.poisson.n_total_jumps / (self.poisson.n_total_jumps +
+                                              self.hawkes.n_total_jumps) <= noise_percentage_ub):
+                break
+            elif seed is not None:
+                exit('A valid simulation is not possible with the provided seed value.')
 
-        if needs_down_sampling:
-            self.down_sampled_poisson_events = np.random.choice(self.poisson.timestamps[0],
-                                                                int(self.hawkes.n_total_jumps * noise_percentage_ub),
-                                                                replace=False)
-
-        # mixed processes
-        if needs_down_sampling:
-            self.mixed_timestamps = np.concatenate((self.hawkes.timestamps[0], self.down_sampled_poisson_events))
+            sim_cnt += 1
         else:
-            self.mixed_timestamps = np.concatenate((self.hawkes.timestamps[0], self.poisson.timestamps[0]))
+            exit(f"After {max_num_sim} simulations, a valid simulation was not obtained. Try changing either poisson's "
+                 f"rate or noise_percentage_ub.")
 
+        self.mixed_timestamps = np.concatenate((self.hawkes.timestamps[0], self.poisson.timestamps[0]))
         sort_ind = np.argsort(self.mixed_timestamps)
         self.mixed_timestamps = self.mixed_timestamps[sort_ind]
 
         # Simulate two exponential distribution as side information
         self.hawkes_exp = np.random.exponential(1. / self.h_exp_beta, self.hawkes.n_total_jumps)
-        if needs_down_sampling:
-            self.poisson_exp = np.random.exponential(1. / self.p_exp_beta, len(self.down_sampled_poisson_events))
-        else:
-            self.poisson_exp = np.random.exponential(1. / self.p_exp_beta, self.poisson.n_total_jumps)
+        self.poisson_exp = np.random.exponential(1. / self.p_exp_beta, self.poisson.n_total_jumps)
 
         # mixed exponential
         self.mixed_expo = np.concatenate((self.hawkes_exp, self.poisson_exp), axis=0)
