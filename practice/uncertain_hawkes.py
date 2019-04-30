@@ -18,12 +18,12 @@ _h_intensity = 0.5
 _h_beta = 2
 _h_alpha = 0.9
 
-_runtime = 1000
+_runtime = 40
 
 _p_intensity = 0.2
 
 _h_exp_rate = 1.5
-_p_exp_rate = 6.5
+_p_exp_rate = 116.5
 
 hum = HawkesUncertainModel(h_lambda=_h_intensity, h_alpha=_h_alpha, h_beta=_h_beta, h_exp_rate=_h_exp_rate,
                            p_lambda=_p_intensity, p_exp_rate=_p_exp_rate,
@@ -36,10 +36,17 @@ event_times = tf.convert_to_tensor(hum.mixed_timestamps, name="event_times_data"
 events_side_info = tf.convert_to_tensor(hum.mixed_expo, name="event_side_data", dtype=tf.float32)
 
 
-# with tf.Session() as sess:
-#     print(sess.run([tf.shape(event_times), tf.shape(events_side_info)]))
+with tf.Session() as sess:
+    print(sess.run([event_times, events_side_info]))
 
 print("Noise Percentage: ", hum.noise_percentage)
+
+exit()
+
+# def sample_z(events_t, events_info,
+#                    hw_sample_alpha, hw_sample_beta, hw_sample_intensity,
+#                    exp_sample_rates,
+#                    cat_sample_prob):
 
 
 def joint_log_prob(events_t, events_info,
@@ -51,6 +58,7 @@ def joint_log_prob(events_t, events_info,
     exp_dist_clustering = tfd.Exponential(rate=exp_sample_rates)
     cluster_prob_assignment = exp_dist_clustering.log_prob(tf.reshape(events_info, [tf.size(events_info), 1]))
     hawkes_cluster_ind = tf.math.argmax(cluster_prob_assignment, axis=1, output_type=tf.dtypes.int32)
+    num_hawkes_events = tf.reduce_sum(hawkes_cluster_ind)
     events_t = tf.boolean_mask(events_t, hawkes_cluster_ind, name='boolean_mask', axis=None)
 
     # Hawkes
@@ -62,6 +70,10 @@ def joint_log_prob(events_t, events_info,
                                         hw_sample_alpha,
                                         hw_sample_beta,
                                         tf.float32, name="hawkes_observations_rv")
+
+    default_neg = lambda: tf.constant(0., dtype=tf.float32)
+    hll = lambda: rv_hawkes_observations.log_likelihood(events_t)
+    hawkes_log_likelihood = tf.case([(tf.less(num_hawkes_events, 1), default_neg)], default=hll)
 
     # exp mixture
     rv_pi = tfd.Dirichlet([0.5, 0.5], name='pi')
@@ -82,7 +94,7 @@ def joint_log_prob(events_t, events_info,
         rv_alpha.log_prob(hw_sample_alpha) +
         rv_beta.log_prob(hw_sample_beta) +
         rv_intensity.log_prob(hw_sample_intensity) +
-        rv_hawkes_observations.log_likelihood(events_t) +
+        hawkes_log_likelihood +
 
         rv_pi.log_prob(stacked_p_rv) +
         tf.reduce_sum(rv_rates.log_prob(exp_sample_rates)) +
@@ -125,7 +137,7 @@ initial_chain_state = [
     tf.constant(0.5, name="init_intensity"),
     # tf.constant([np.mean(hum.mixed_expo[:len(hum.mixed_expo)]), np.mean(hum.mixed_expo[len(hum.mixed_expo):])],
     #             name='init_rates'),
-    tf.constant([1.5, 6.5], name='init_rates'),
+    tf.constant([116.5, 1.5], name='init_rates'),
     tf.constant(0.5, name="init_cat_prob"),
 ]
 
