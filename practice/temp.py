@@ -165,7 +165,9 @@ import hawkes as hwk
 from sklearn.metrics import f1_score
 import tensorflow as tf
 import tensorflow_probability as tfp
+from sklearn import metrics
 import numpy as np
+
 tfd = tfp.distributions
 
 import sys
@@ -174,20 +176,20 @@ from hawkes_uncertain_simulator import HawkesUncertainModel
 
 plot_base_path = '/shared/Results/HawkesUncertainEvents/temp'
 
-_h_intensity = 1
+_h_intensity = 0.9
 _h_beta = 2
-_h_alpha = 0.9
+_h_alpha = 1.1
 
 _runtime = 10
 
 _p_intensity = 0.3
 
-_h_exp_rate = 1.5
-_p_exp_rate = 3.5
+_h_exp_rate = 2.5
+_p_exp_rate = 2.5
 
 hum = HawkesUncertainModel(h_lambda=_h_intensity, h_alpha=_h_alpha, h_beta=_h_beta, h_exp_rate=_h_exp_rate,
                            p_lambda=_p_intensity, p_exp_rate=_p_exp_rate,
-                           noise_percentage_ub=0.2, run_time=_runtime, delta=0.01)
+                           noise_percentage_ub=0.2, run_time=_runtime, delta=0.01, seed=3)
 
 # event_times = tf.convert_to_tensor(hum.hawkes.timestamps[0], name="event_times_data", dtype=tf.float32)
 # events_side_info = tf.convert_to_tensor(hum.hawkes_exp, name="event_side_data", dtype=tf.float32)
@@ -285,6 +287,7 @@ def sample_z(events_t, events_info,
         event_assignment_log_prob = tf.stack([poisson_ll, hawkes_ll - prev_hawkes_ll], name='point_process_ll')
         event_assignment_log_prob = event_assignment_log_prob + exp_mixture_log_prob[i]
         # event_assignment_log_prob = event_assignment_log_prob
+        # event_assignment_log_prob = exp_mixture_log_prob[i]
 
         # for logging purposes
         mixture_log_prob = tf.assign(mixture_log_prob[i], event_assignment_log_prob)
@@ -313,6 +316,97 @@ def sample_z(events_t, events_info,
         mixture_log_prob = mixture_log_prob + 0
 
     return z, mixture_log_prob
+
+
+def sample_z_w_true_hawkes_mask(events_t, events_info,
+                                hw_sample_alpha, hw_sample_beta, hw_sample_intensity,
+                                poi_sample_intensity,
+                                exp_hw_sample_rate, exp_poi_sample_rate,
+                                hawkes_cat_prob,
+                                true_hawkes_mask):
+    true_poisson_mask = tf.abs(true_hawkes_mask - 1)
+
+    num_events = events_t.get_shape()[0]
+
+    # The order of likelihoods are switched here to accommodate the hawkes mask
+    # compute log_prob of cat assignment, due to the exp mixture model
+    exp_dists = tfd.Exponential(rate=[exp_poi_sample_rate, exp_hw_sample_rate])
+    exp_log_prob = exp_dists.log_prob(tf.reshape(events_info, [num_events, 1]))
+    stacked_cat_probs = tf.log(tf.stack([1. - hawkes_cat_prob, hawkes_cat_prob], name='p_stacked'))
+
+    exp_mixture_log_prob = stacked_cat_probs + exp_log_prob
+    # exp_mixture_log_prob = exp_log_prob
+
+    rv_hawkes_observations = hwk.Hawkes(hw_sample_intensity,
+                                        hw_sample_alpha,
+                                        hw_sample_beta,
+                                        tf.float32, name="hawkes_observations_rv")
+
+    rv_poisson_observations = hwk.Hawkes(poi_sample_intensity,
+                                         0,
+                                         1,
+                                         tf.float32, name="poisson_observations_rv")
+
+    rv_exp_poisson_inter_arrival = tfd.Exponential(poi_sample_intensity)
+
+    def cond(i, iters):
+        return tf.less(i, iters)
+
+    def body(i, iters):
+        with tf.variable_scope("sample_latent_variable", reuse=tf.AUTO_REUSE):
+            hawkes_mask = tf.get_variable('hawkes_mask', num_events, dtype=tf.int32,
+                                          initializer=tf.zeros_initializer())
+            prev_hawkes_ll = tf.get_variable('prev_hawkes_ll', [], dtype=tf.float32, initializer=tf.zeros_initializer())
+
+            last_noise_timestamp = tf.get_variable('last_noise_timestamp', [], dtype=tf.float32,
+                                                   initializer=tf.zeros_initializer())
+
+            mixture_log_prob = tf.get_variable('mixture_log_prob', [num_events, 2], dtype=tf.float32,
+                                               initializer=tf.zeros_initializer())
+
+        # Hawkes log-likelihood
+        true_hawkes_history = tf.boolean_mask(events_t[:i], true_hawkes_mask[:i])
+        hawkes_ll = rv_hawkes_observations.log_likelihood(tf.concat([true_hawkes_history, [events_t[i]]], axis=0))
+
+        # Poisson log-likelihood
+        true_poisson_history = tf.boolean_mask(events_t[:i], true_poisson_mask[:i])
+        poisson_ll = rv_poisson_observations.log_likelihood(tf.concat([true_poisson_history, [events_t[i]]], axis=0))
+
+        # TODO: check whether to use the entire Hawkes ll, or just the difference with the last one
+        event_assignment_log_prob = tf.stack([poisson_ll, hawkes_ll], name='point_process_ll')
+        event_assignment_log_prob = event_assignment_log_prob + exp_mixture_log_prob[i]
+        # event_assignment_log_prob = event_assignment_log_prob
+        # event_assignment_log_prob = exp_mixture_log_prob[i]
+
+        # for logging purposes
+        mixture_log_prob = tf.assign(mixture_log_prob[i], event_assignment_log_prob)
+
+        # 0 for poisson/noise, 1 for hawkes (order is changed here to accommodate the hawkes_mask)
+        event_assignment = tf.argmax(event_assignment_log_prob, output_type=tf.int32)
+        hawkes_mask = tf.assign(hawkes_mask[i], event_assignment)
+
+        set_last_noise_ts = lambda: tf.assign(last_noise_timestamp, events_t[i])
+        set_last_hawkes_ll = lambda: tf.assign(prev_hawkes_ll, hawkes_ll)
+        f = tf.case([(tf.equal(true_hawkes_mask[i], 0), set_last_noise_ts)], default=set_last_hawkes_ll)
+
+        with tf.control_dependencies([mixture_log_prob, f, hawkes_mask]):
+            return [tf.add(i, 1), iters]
+
+    i = tf.constant(0, dtype=tf.int32)
+    i, _ = tf.while_loop(cond, body, [i, num_events], name="sample_z", parallel_iterations=1)
+
+    with tf.variable_scope("sample_latent_variable", reuse=tf.AUTO_REUSE):
+        hawkes_mask = tf.get_variable('hawkes_mask', dtype=tf.int32)
+        mixture_log_prob = tf.get_variable('mixture_log_prob', dtype=tf.float32)
+
+    # Invert the Hawkes mast to get Z (noise mask)
+    with tf.control_dependencies([i]):
+        z = tf.abs(hawkes_mask - 1)
+        mixture_log_prob = mixture_log_prob + 0
+
+    return z, mixture_log_prob
+
+
 
 
 def sample_z_exp_only(events_info, exp_sample_rates, cat_sample_prob):
@@ -472,11 +566,30 @@ def sample_z_point_process_only(events_t,
 
     return z, mixture_log_prob
 
-z, mixture_log_prob = sample_z(event_times, events_side_info,
-                               _h_alpha, _h_beta, _h_intensity,
-                               _p_intensity,
-                               _h_exp_rate, _p_exp_rate,
-                               1. - hum.noise_percentage)
+# z, mixture_log_prob = sample_z(event_times, events_side_info,
+#                                _h_alpha, _h_beta, _h_intensity,
+#                                _p_intensity,
+#                                _h_exp_rate, _p_exp_rate,
+#                                1. - hum.noise_percentage)
+
+
+hawkes_mask_ture_temp = np.abs(hum.mixed_labels - 1)
+true_hawkes_mask = tf.convert_to_tensor(hawkes_mask_ture_temp, tf.int32)
+
+z, mixture_log_prob = sample_z_w_true_hawkes_mask(event_times, events_side_info,
+                                                  _h_alpha, _h_beta, _h_intensity,
+                                                  _p_intensity,
+                                                  _h_exp_rate, _p_exp_rate,
+                                                  1. - hum.noise_percentage,
+                                                  true_hawkes_mask)
+
+
+# z, mixture_log_prob = sample_z(event_times, events_side_info,
+#                                                   _h_alpha, _h_beta, _h_intensity,
+#                                                   _p_intensity,
+#                                                   _h_exp_rate, _p_exp_rate,
+#                                                   1. - hum.noise_percentage)
+
 
 # z, mixture_log_prob = sample_z_point_process_only(event_times,
 #                                                   _h_alpha, _h_beta, _h_intensity,
@@ -499,7 +612,7 @@ with tf.Session() as sess:
 
 print(z_)
 print(np.exp(mixture_log_prob_))
-print(np.exp(mixture_log_prob_[:, 0]) / np.sum(np.exp(mixture_log_prob_), axis=1))
+probs = np.exp(mixture_log_prob_[:, 0]) / np.sum(np.exp(mixture_log_prob_), axis=1)
 
 # with tf.Session() as sess:
 #     # print(sess.run([event_times, events_side_info]))
@@ -517,11 +630,36 @@ print(np.exp(mixture_log_prob_[:, 0]) / np.sum(np.exp(mixture_log_prob_), axis=1
 # print(z_)
 # print(hum.mixed_timestamps)
 print(hum.mixed_labels)
+print(hum.mixed_timestamps)
 #
 # print(f1_score(z_, z_exp_))
 #
 #
 # print(f1_score(hum.mixed_labels, z_exp_))
 print(f1_score(hum.mixed_labels, z_))
+fpr, tpr, thresholds = metrics.roc_curve(hum.mixed_labels, probs)
+auc = metrics.auc(fpr, tpr)
+print(auc)
 # # print("exp only:", f1_score(hum.mixed_labels, z_))
 # # print("Noise Percentage: ", hum.noise_percentage)
+
+
+
+# Poisson log likelihood calculated by the Hawkes
+#
+# rv_hawkes_observations = hwk.Hawkes(_p_intensity, 0, 1, tf.float32, name="hawkes_observations")
+# poisson_times = tf.convert_to_tensor(hum.poisson.timestamps[0], tf.float32)
+# ph = rv_hawkes_observations.log_likelihood(poisson_times)
+# print(hum.poisson.timestamps[0])
+# poisson_inter_arrivals = hum.poisson.timestamps[0][1:] - hum.poisson.timestamps[0][:-1]
+# poisson_inter_arrivals = np.insert(poisson_inter_arrivals, 0,  hum.poisson.timestamps[0][0])
+# print(poisson_inter_arrivals)
+# rv_exp = tfd.Exponential(_p_intensity)
+# pl = tf.reduce_sum(rv_exp.log_prob(poisson_inter_arrivals))
+# with tf.Session() as sess:
+#     sess.run(tf.global_variables_initializer())
+#     res = sess.run([ph, pl])
+#
+# print(res)
+# print(hum.poisson.timestamps[0])
+# print(poisson_inter_arrivals)
