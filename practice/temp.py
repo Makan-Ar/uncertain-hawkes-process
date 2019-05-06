@@ -184,7 +184,7 @@ _runtime = 10
 
 _p_intensity = 0.3
 
-_h_exp_rate = 2.5
+_h_exp_rate = 3.5
 _p_exp_rate = 2.5
 
 hum = HawkesUncertainModel(h_lambda=_h_intensity, h_alpha=_h_alpha, h_beta=_h_beta, h_exp_rate=_h_exp_rate,
@@ -243,7 +243,7 @@ def sample_z(events_t, events_info,
              poi_sample_intensity,
              exp_hw_sample_rate, exp_poi_sample_rate,
              hawkes_cat_prob):
-
+    print(hawkes_cat_prob)
     num_events = events_t.get_shape()[0]
 
     # The order of likelihoods are switched here to accommodate the hawkes mask
@@ -284,7 +284,7 @@ def sample_z(events_t, events_info,
         poisson_ll = rv_exp_poisson_inter_arrival.log_cdf(events_t[i] - last_noise_timestamp)
 
         # TODO: check whether to use the entire Hawkes ll, or just the difference with the last one
-        event_assignment_log_prob = tf.stack([poisson_ll, hawkes_ll - prev_hawkes_ll], name='point_process_ll')
+        event_assignment_log_prob = tf.stack([poisson_ll, hawkes_ll], name='point_process_ll')
         event_assignment_log_prob = event_assignment_log_prob + exp_mixture_log_prob[i]
         # event_assignment_log_prob = event_assignment_log_prob
         # event_assignment_log_prob = exp_mixture_log_prob[i]
@@ -566,22 +566,22 @@ def sample_z_point_process_only(events_t,
 
     return z, mixture_log_prob
 
-# z, mixture_log_prob = sample_z(event_times, events_side_info,
-#                                _h_alpha, _h_beta, _h_intensity,
-#                                _p_intensity,
-#                                _h_exp_rate, _p_exp_rate,
-#                                1. - hum.noise_percentage)
+z, mixture_log_prob = sample_z(event_times, events_side_info,
+                               _h_alpha, _h_beta, _h_intensity,
+                               _p_intensity,
+                               _h_exp_rate, _p_exp_rate,
+                               1. - hum.noise_percentage)
 
 
-hawkes_mask_ture_temp = np.abs(hum.mixed_labels - 1)
-true_hawkes_mask = tf.convert_to_tensor(hawkes_mask_ture_temp, tf.int32)
-
-z, mixture_log_prob = sample_z_w_true_hawkes_mask(event_times, events_side_info,
-                                                  _h_alpha, _h_beta, _h_intensity,
-                                                  _p_intensity,
-                                                  _h_exp_rate, _p_exp_rate,
-                                                  1. - hum.noise_percentage,
-                                                  true_hawkes_mask)
+# hawkes_mask_ture_temp = np.abs(hum.mixed_labels - 1)
+# true_hawkes_mask = tf.convert_to_tensor(hawkes_mask_ture_temp, tf.int32)
+#
+# z, mixture_log_prob = sample_z_w_true_hawkes_mask(event_times, events_side_info,
+#                                                   _h_alpha, _h_beta, _h_intensity,
+#                                                   _p_intensity,
+#                                                   _h_exp_rate, _p_exp_rate,
+#                                                   1. - hum.noise_percentage,
+#                                                   true_hawkes_mask)
 
 
 # z, mixture_log_prob = sample_z(event_times, events_side_info,
@@ -611,7 +611,7 @@ with tf.Session() as sess:
 
 
 print(z_)
-print(np.exp(mixture_log_prob_))
+print(mixture_log_prob_)
 probs = np.exp(mixture_log_prob_[:, 0]) / np.sum(np.exp(mixture_log_prob_), axis=1)
 
 # with tf.Session() as sess:
@@ -644,9 +644,8 @@ print(auc)
 # # print("Noise Percentage: ", hum.noise_percentage)
 
 
-
-# Poisson log likelihood calculated by the Hawkes
-#
+# # Poisson log likelihood calculated by the Hawkes
+# #
 # rv_hawkes_observations = hwk.Hawkes(_p_intensity, 0, 1, tf.float32, name="hawkes_observations")
 # poisson_times = tf.convert_to_tensor(hum.poisson.timestamps[0], tf.float32)
 # ph = rv_hawkes_observations.log_likelihood(poisson_times)
@@ -663,3 +662,16 @@ print(auc)
 # print(res)
 # print(hum.poisson.timestamps[0])
 # print(poisson_inter_arrivals)
+
+
+# rexp = tfd.Exponential(_h_exp_rate)
+# dp = rexp.log_prob(events_side_info)
+# with tf.Session() as sess:
+#     print(sess.run(dp))
+#
+# exp_dists = tfd.Exponential(rate=_p_exp_rate)
+# resh = tf.reshape(events_side_info, [len(hum.mixed_timestamps), 1])
+# exp_log_prob = exp_dists.log_prob(events_side_info)
+# with tf.Session() as sess:
+#     print(sess.run(events_side_info))
+#     print(sess.run(exp_log_prob))
