@@ -105,8 +105,8 @@ def joint_log_prob_with_gamma_priors(data, sample_prob_1, sample_rates):
 # MCMC
 is_prior_gamma = True
 
-number_of_steps = 25000
-burnin = 2500
+number_of_steps = 5000
+burnin = 1000
 
 # set the chain's initial state
 initial_chain_state = [
