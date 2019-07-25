@@ -160,19 +160,15 @@
 # print(len(poisson.timestamps[0]) / time)
 
 
-
-import hawkes as hwk
-from sklearn.metrics import f1_score
-import tensorflow as tf
-import tensorflow_probability as tfp
-from sklearn import metrics
 import numpy as np
+import hawkes as hwk
+import tensorflow as tf
+from sklearn import metrics
+from sklearn.metrics import f1_score
+import tensorflow_probability as tfp
+from hawkes_uncertain_simulator import HawkesUncertainModel
 
 tfd = tfp.distributions
-
-import sys
-sys.path.insert(0, r'/nethome/marastu2/uncertain-hawkes-process')
-from hawkes_uncertain_simulator import HawkesUncertainModel
 
 plot_base_path = '/shared/Results/HawkesUncertainEvents/temp'
 

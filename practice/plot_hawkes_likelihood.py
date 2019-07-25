@@ -5,6 +5,7 @@ import tensorflow as tf
 from tick.hawkes import SimuHawkesExpKernels
 import matplotlib.pyplot as plt
 from tick.plot import plot_point_process
+from likelihood_utils import hawkes_log_likelihood_numpy
 
 # _intensity = 0.5
 # _beta = 2
@@ -58,24 +59,6 @@ events_side_info = tf.convert_to_tensor(hum.mixed_expo, name="event_side_data", 
 
 hawkes_event_times = hum.mixed_timestamps
 
-
-def hawkes_log_likelihood(hawkes_event_times, intensity, alpha, beta):
-    a_calc = np.zeros(len(hawkes_event_times))
-    for i in range(1, len(hawkes_event_times)):
-        a_calc[i] = np.exp(-1 * beta * (hawkes_event_times[i] - hawkes_event_times[i - 1])) * (1 + a_calc[i - 1])
-
-    term1 = np.sum(np.log(intensity + alpha * a_calc))
-
-    term2 = intensity * hawkes_event_times[-1]
-
-    ker_ = np.sum(np.exp(-1 * beta * (hawkes_event_times[-1] - hawkes_event_times))) - len(hawkes_event_times)
-    term3 = (alpha / beta) * ker_
-
-    res = term1 - term2 + term3
-    return res
-    # return term1, -1 * term2, term3, res
-
-
 def hawkes_intensity(hawkes_event_times, intensity, alpha, beta):
     hawkes_intensity = np.zeros(len(hawkes_event_times))
     for i in range(1, len(hawkes_event_times)):
@@ -126,21 +109,21 @@ uhll = [0]
 hll = [0]
 pll = [0]
 for i in range(1, len(hawkes_event_times)):
-    ll = hawkes_log_likelihood(hawkes_event_times[:i], _h_intensity, _h_alpha, _h_beta)
+    ll = hawkes_log_likelihood_numpy(hawkes_event_times[:i], _h_intensity, _h_alpha, _h_beta)
     uhll.append(ll)
 
 uhll = np.array(uhll)
 uhll[1:] = uhll[1:] - uhll[:-1]
 
 for i in range(1, len(hum.hawkes.timestamps[0])):
-    ll = hawkes_log_likelihood(hum.hawkes.timestamps[0][:i], _h_intensity, _h_alpha, _h_beta)
+    ll = hawkes_log_likelihood_numpy(hum.hawkes.timestamps[0][:i], _h_intensity, _h_alpha, _h_beta)
     hll.append(ll)
 
 hll = np.array(hll)
 hll[1:] = hll[1:] - hll[:-1]
 
 for i in range(1, len(hum.poisson.timestamps[0])):
-    ll = hawkes_log_likelihood(hum.poisson.timestamps[0][:i], _h_intensity, _h_alpha, _h_beta)
+    ll = hawkes_log_likelihood_numpy(hum.poisson.timestamps[0][:i], _h_intensity, _h_alpha, _h_beta)
     pll.append(ll)
 
 pll = np.array(pll)

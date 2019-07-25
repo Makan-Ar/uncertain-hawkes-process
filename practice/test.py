@@ -2,9 +2,12 @@ import time
 import numpy as np
 import hawkes as hwk
 import tensorflow as tf
-from tick.hawkes import SimuHawkesExpKernels
 import matplotlib.pyplot as plt
 from tick.plot import plot_point_process
+from tick.hawkes import SimuHawkesExpKernels
+from likelihood_utils import hawkes_log_likelihood_numpy
+
+
 
 _intensity = 0.5
 _beta = 2
@@ -32,55 +35,38 @@ event_times_loaded = np.loadtxt('./hsim.csv', skiprows=1)
 hawkes_event_times = event_times_loaded.ravel()
 print(len(hawkes_event_times))
 
-
-def hawkes_cum_log_likelihood(hawkes_event_times, intensity, alpha, beta):
-    a_calc = np.zeros(len(hawkes_event_times))
-    for i in range(1, len(hawkes_event_times)):
-        a_calc[i] = np.exp(-1 * beta * (hawkes_event_times[i] - hawkes_event_times[i - 1])) * (1 + a_calc[i - 1])
-
-    term1 = np.sum(np.log(intensity + alpha * a_calc))
-
-    term2 = np.sum(intensity * hawkes_event_times)
-
-    ker_ = 0
-    for k in range(1, len(hawkes_event_times)):
-        ker_ += np.sum(np.exp(-1 * beta * (hawkes_event_times[k] - hawkes_event_times[0:k])) - 1)
-    term3 = (alpha / beta) * ker_
-
-    res = term1 - term2 + term3
-    return res
-    # return term1, -1 * term2, term3, res
-
-
-def hawkes_log_likelihood(hawkes_event_times, intensity, alpha, beta):
-    a_calc = np.zeros(len(hawkes_event_times))
-    for i in range(1, len(hawkes_event_times)):
-        a_calc[i] = np.exp(-1 * beta * (hawkes_event_times[i] - hawkes_event_times[i - 1])) * (1 + a_calc[i - 1])
-
-    term1 = np.sum(np.log(intensity + alpha * a_calc))
-
-    term2 = intensity * hawkes_event_times[-1]
-
-    ker_ = np.sum(np.exp(-1 * beta * (hawkes_event_times[-1] - hawkes_event_times))) - len(hawkes_event_times)
-    term3 = (alpha / beta) * ker_
-
-    res = term1 - term2 + term3
-    return res
-    # return term1, -1 * term2, term3, res
+# # This is a bad implementation!
+# def hawkes_cum_log_likelihood(hawkes_event_times, intensity, alpha, beta):
+#     a_calc = np.zeros(len(hawkes_event_times))
+#     for i in range(1, len(hawkes_event_times)):
+#         a_calc[i] = np.exp(-1 * beta * (hawkes_event_times[i] - hawkes_event_times[i - 1])) * (1 + a_calc[i - 1])
+#
+#     term1 = np.sum(np.log(intensity + alpha * a_calc))
+#
+#     term2 = np.sum(intensity * hawkes_event_times)
+#
+#     ker_ = 0
+#     for k in range(1, len(hawkes_event_times)):
+#         ker_ += np.sum(np.exp(-1 * beta * (hawkes_event_times[k] - hawkes_event_times[0:k])) - 1)
+#     term3 = (alpha / beta) * ker_
+#
+#     res = term1 - term2 + term3
+#     return res
+#     # return term1, -1 * term2, term3, res
 
 alpha_test = 0.9
 
 # for i in [10, 2, 1.7,  1.5, 0.9, 0.5, 0.1]:
 #     ti = time.time()
 #     print(i)
-#     res = hawkes_log_likelihood(event_times, _intensity, i, _beta)
+#     res = hawkes_log_likelihood_numpy(event_times, _intensity, i, _beta)
 #     j = time.time() - ti
 #     print(res)
 
 # print()
 # result = []
 # for i in np.arange(0, 12, 0.1):
-#     result.append(hawkes_log_likelihood(event_times, _intensity, i, _beta))
+#     result.append(hawkes_log_likelihood_numpy(event_times, _intensity, i, _beta))
 #     print(i, end='\r')
 #
 # print()
@@ -94,7 +80,7 @@ alpha_test = 0.9
 event_times = tf.convert_to_tensor(hawkes_event_times, name="event_times_data", dtype=tf.float64)
 
 ti = time.time()
-res = hawkes_log_likelihood(hawkes_event_times, _intensity, alpha_test, _beta)
+res = hawkes_log_likelihood_numpy(hawkes_event_times, _intensity, alpha_test, _beta)
 j = time.time() - ti
 
 hawkes = hwk.Hawkes(_intensity, alpha_test, _beta, tf.float64)

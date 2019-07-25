@@ -26,11 +26,14 @@ def hawkes_log_likelihood_numpy(event_times, intensity, alpha, beta):
     return res
 
 
-# Based on https://stats.stackexchange.com/questions/360814/mle-for-a-homogeneous-poisson-process and
-# https://math.stackexchange.com/questions/344487/log-likelihood-of-a-realization-of-a-poisson-process
 def poisson_log_likelihood_numpy(num_events, intensity, end_time):
+    # TODO: Make sure this is the correct formula, and if so, what end time should be used.
     """
     Returns Poisson process log likelihood.
+
+    Based on https://stats.stackexchange.com/questions/360814/mle-for-a-homogeneous-poisson-process and
+    https://math.stackexchange.com/questions/344487/log-likelihood-of-a-realization-of-a-poisson-process
+
     :param num_events: (int) number of event times.
     :param intensity: (float) rate/intensity of the Poisson process.
     :param end_time: (float) end time of the current sequence.
@@ -92,7 +95,7 @@ def z_i_posterior_log_prob(event_time, event_mark, event_times_hist, z_hist, z_p
 def z_posterior_prob(z, event_times, event_marks, z_prior,
                      hawkes_params, poisson_lambda,
                      hawkes_mark_exp_rate, noise_mark_exp_rate):
-    # TODO: Take care of i=1 prob
+    # TODO: Take care of i=1 prob.
     """
     Returns product of p(z_i=1 | T_1:i, y_i, Z_1:i-1) for i from 0 to len(event_times)
 
@@ -116,7 +119,7 @@ def z_posterior_prob(z, event_times, event_marks, z_prior,
 def z_posterior_log_prob(z, event_times, event_marks, z_prior,
                          hawkes_params, poisson_lambda,
                          hawkes_mark_exp_rate, noise_mark_exp_rate):
-    # TODO: Take care of i=1 prob
+    # TODO: Take care of i=1 prob.
     """
     Returns sum of ln p(z_i=1 | T_1:i, y_i, Z_1:i-1) for i from 0 to len(event_times)
 

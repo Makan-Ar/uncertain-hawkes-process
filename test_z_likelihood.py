@@ -1,28 +1,9 @@
 import numpy as np
 import hawkes as hwk
+import likelihood_utils
 from scipy.stats import expon
 from sklearn.metrics import f1_score, auc, roc_curve
-
-import sys
-sys.path.insert(0, r'/nethome/marastu2/uncertain-hawkes-process')
 from hawkes_uncertain_simulator import HawkesUncertainModel
-
-
-def hawkes_log_likelihood(hawkes_event_times, intensity, alpha, beta):
-    a_calc = np.zeros(len(hawkes_event_times))
-    for i in range(1, len(hawkes_event_times)):
-        a_calc[i] = np.exp(-1 * beta * (hawkes_event_times[i] - hawkes_event_times[i - 1])) * (1 + a_calc[i - 1])
-
-    term1 = np.sum(np.log(intensity + alpha * a_calc))
-
-    term2 = intensity * hawkes_event_times[-1]
-
-    ker_ = np.sum(np.exp(-1 * beta * (hawkes_event_times[-1] - hawkes_event_times))) - len(hawkes_event_times)
-    term3 = (alpha / beta) * ker_
-
-    res = term1 - term2 + term3
-    return res
-
 
 plot_base_path = '/shared/Results/HawkesUncertainEvents/temp'
 
@@ -42,6 +23,22 @@ hum = HawkesUncertainModel(h_lambda=_h_intensity, h_alpha=_h_alpha, h_beta=_h_be
                            noise_percentage_ub=0.2, run_time=_runtime, delta=0.01, seed=3)
 
 print("Noise Percentage: ", hum.noise_percentage)
+
+
+# Testing out the prob of the full posterior
+sim_event_times = hum.mixed_timestamps
+sim_event_marks = hum.mixed_expo
+sim_true_labels = hum.mixed_labels.astype(np.bool)
+sim_true_z_prior = hum.noise_percentage
+
+print("Z Posterior Prob: ", likelihood_utils.z_posterior_prob(sim_true_labels, sim_event_times, sim_event_marks,
+                                                              sim_true_z_prior, (_h_intensity, _h_alpha, _h_beta),
+                                                              _p_intensity, _h_exp_rate, _p_exp_rate))
+
+print("Z Posterior Log Prob: ", likelihood_utils.z_posterior_log_prob(sim_true_labels, sim_event_times, sim_event_marks,
+                                                                      sim_true_z_prior,
+                                                                      (_h_intensity, _h_alpha, _h_beta),
+                                                                      _p_intensity, _h_exp_rate, _p_exp_rate))
 
 
 def sample_z(events_t, events_info,
@@ -72,7 +69,8 @@ def sample_z(events_t, events_info,
 
     for i in range(num_events):
         hawkes_times = np.append(events_t[hawkes_mask == 1], events_t[i])
-        hawkes_ll = hawkes_log_likelihood(hawkes_times, hw_sample_intensity, hw_sample_alpha, hw_sample_beta)
+        hawkes_ll = likelihood_utils.hawkes_log_likelihood_numpy(hawkes_times, hw_sample_intensity, hw_sample_alpha,
+                                                                 hw_sample_beta)
 
         # poisson log-likelihood
         poisson_ll = expon.logcdf(events_t[i] - last_noise_timestamp, loc=0, scale=1. / poi_sample_intensity)

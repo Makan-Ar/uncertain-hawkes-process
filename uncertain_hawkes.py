@@ -5,9 +5,6 @@ import tensorflow as tf
 import matplotlib.pyplot as plt
 import tensorflow_probability as tfp
 from tick.hawkes import SimuHawkesExpKernels
-
-import sys
-sys.path.insert(0, r'/nethome/marastu2/uncertain-hawkes-process')
 from hawkes_uncertain_simulator import HawkesUncertainModel
 
 tfd = tfp.distributions
