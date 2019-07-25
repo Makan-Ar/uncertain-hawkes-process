@@ -11,7 +11,7 @@ _h_intensity = 0.9
 _h_beta = 2
 _h_alpha = 1.1
 
-_runtime = 10
+_runtime = 30
 
 _p_intensity = 0.3
 

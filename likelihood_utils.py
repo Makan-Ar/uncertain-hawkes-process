@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.stats import expon
+from hawkes_uncertain_simulator import HawkesUncertainModel
 
 
 def hawkes_log_likelihood_numpy(event_times, intensity, alpha, beta):
@@ -70,8 +71,10 @@ def z_i_posterior_prob(event_time, event_mark, event_times_hist, z_hist, z_prior
     hawkes_prob_hawkes = np.exp(hawkes_log_likelihood_numpy(
         np.append(event_times_hist[np.logical_not(z_hist)], event_time), hawkes_intensity, hawkes_alpha, hawkes_beta))
 
-    poisson_prob_noise = np.exp(poisson_log_likelihood_numpy(np.sum(z_hist) + 1, poisson_lambda, event_times_hist[-1]))
-    poisson_prob_hawkes = np.exp(poisson_log_likelihood_numpy(np.sum(z_hist), poisson_lambda, event_times_hist[-1]))
+    poisson_prob_noise = np.exp(poisson_log_likelihood_numpy(np.sum(z_hist) + 1, poisson_lambda, event_time))
+
+    last_noise_event_time = event_times_hist[z_hist][-1]
+    poisson_prob_hawkes = np.exp(poisson_log_likelihood_numpy(np.sum(z_hist), poisson_lambda, last_noise_event_time))
 
     numerator = z_prior * mark_prob_noise * hawkes_prob_noise * poisson_prob_noise
     normalizer = ((1 - z_prior) * mark_prob_hawkes * hawkes_prob_hawkes * poisson_prob_hawkes) + numerator
@@ -112,7 +115,7 @@ def z_posterior_prob(z, event_times, event_marks, z_prior,
     for i in range(1, len(event_times)):
         z_i_probs[i] = z_i_posterior_prob(event_times[i], event_marks[i], event_times[:i], z[:i], z_prior,
                                           hawkes_params, poisson_lambda, hawkes_mark_exp_rate, noise_mark_exp_rate)
-
+        print(i, event_times[i], z[i], z_i_probs[i])
     return np.prod(z_i_probs)
 
 
@@ -138,3 +141,26 @@ def z_posterior_log_prob(z, event_times, event_marks, z_prior,
                                               hawkes_params, poisson_lambda, hawkes_mark_exp_rate, noise_mark_exp_rate)
 
     return np.sum(z_i_probs)
+
+
+if __name__ == "__main__":
+    _h_intensity = 0.9
+    _h_beta = 2
+    _h_alpha = 1.1
+
+    _runtime = 50
+
+    _p_intensity = 0.3
+
+    _h_exp_rate = 3.5
+    _p_exp_rate = 2.5
+
+    hum = HawkesUncertainModel(h_lambda=_h_intensity, h_alpha=_h_alpha, h_beta=_h_beta, h_exp_rate=_h_exp_rate,
+                               p_lambda=_p_intensity, p_exp_rate=_p_exp_rate,
+                               noise_percentage_ub=0.2, run_time=_runtime, delta=0.01, seed=3)
+
+    # Testing out the prob of the full posterior
+    sim_event_times = hum.mixed_timestamps
+    sim_event_marks = hum.mixed_expo
+    sim_true_labels = hum.mixed_labels.astype(np.bool)
+    sim_true_z_prior = hum.noise_percentage
