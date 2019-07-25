@@ -22,8 +22,8 @@ from tick.plot import plot_point_process
 # dt = 0.01
 # hawkes_sim.track_intensity(dt)
 # hawkes_sim.simulate()
-# hawkes_event_times = hawkes_sim.timestamps[0]
-# # print(len(hawkes_event_times))
+# event_times = hawkes_sim.timestamps[0]
+# # print(len(event_times))
 # # plot_point_process(hawkes_sim, n_points=5000, t_min=1, max_jumps=200)
 # # plt.show()
 
@@ -113,7 +113,7 @@ for i in range(1, len(hum.hawkes.timestamps[0])):
 # plt.plot(hum.poisson.timestamps[0], hawkes_intensity(hum.poisson.timestamps[0], _h_intensity, _h_alpha, _h_beta), ls=':',
 #          color="red", alpha=0.5)
 #
-# plt.plot(hawkes_event_times, hawkes_intensity(hawkes_event_times, _h_intensity, _h_alpha, _h_beta), color='green',
+# plt.plot(event_times, hawkes_intensity(event_times, _h_intensity, _h_alpha, _h_beta), color='green',
 #          alpha=0.5)
 # for ht in hum.hawkes.timestamps[0]:
 #     plt.axvline(x=ht, color="black", alpha=0.5)
@@ -167,14 +167,14 @@ plt.show()
 # for i in [10, 2, 1.7,  1.5, 0.9, 0.5, 0.1]:
 #     ti = time.time()
 #     print(i)
-#     res = hawkes_log_likelihood(hawkes_event_times, _intensity, i, _beta)
+#     res = hawkes_log_likelihood(event_times, _intensity, i, _beta)
 #     j = time.time() - ti
 #     print(res)
 
 # print()
 # result = []
 # for i in np.arange(0, 12, 0.1):
-#     result.append(hawkes_log_likelihood(hawkes_event_times, _intensity, i, _beta))
+#     result.append(hawkes_log_likelihood(event_times, _intensity, i, _beta))
 #     print(i, end='\r')
 #
 # print()
@@ -185,10 +185,10 @@ plt.show()
 # # plt.legend()
 # plt.show()
 #
-# event_times = tf.convert_to_tensor(hawkes_event_times, name="event_times_data", dtype=tf.float64)
+# event_times = tf.convert_to_tensor(event_times, name="event_times_data", dtype=tf.float64)
 #
 # ti = time.time()
-# res = hawkes_log_likelihood(hawkes_event_times, _intensity, alpha_test, _beta)
+# res = hawkes_log_likelihood(event_times, _intensity, alpha_test, _beta)
 # j = time.time() - ti
 #
 # hawkes = hwk.Hawkes(_intensity, alpha_test, _beta, tf.float64)

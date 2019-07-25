@@ -1,12 +1,12 @@
 import tensorflow as tf
 
-import utils
+import likelihood_utils
 
 DATA_FILE = "data/birth_life_2010.txt"
 
 # Step 1: read in data from the .txt file
 # data is a numpy array of shape (190, 2), each row is a datapoint
-data, n_samples = utils.read_birth_life_data(DATA_FILE)
+data, n_samples = likelihood_utils.read_birth_life_data(DATA_FILE)
 
 # Step 2: create placeholders for X (birth rate) and Y (life expectancy)
 X = tf.placeholder(tf.float32, name='X')

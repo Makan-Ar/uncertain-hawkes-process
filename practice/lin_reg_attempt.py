@@ -1,5 +1,5 @@
 import time
-import utils
+import likelihood_utils
 import tensorflow as tf
 
 DATA_FILE = "birth_life_2010.txt"
@@ -46,7 +46,7 @@ batch_size = 20
 # With proper data loading
 
 # step 1: load the data with numpy or something
-data, n_samples = utils.read_birth_life_data(DATA_FILE)
+data, n_samples = likelihood_utils.read_birth_life_data(DATA_FILE)
 
 # step 2: create a tf dataset and manipulate it as needed
 dataset = tf.data.Dataset.from_tensor_slices((data[:, 0], data[:, 1]))  # tuple shape matches the iterator output

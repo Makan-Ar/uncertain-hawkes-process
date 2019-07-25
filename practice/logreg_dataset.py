@@ -14,7 +14,7 @@ import numpy as np
 import tensorflow as tf
 import time
 
-import utils
+import likelihood_utils
 
 # Define paramaters for the model
 learning_rate = 0.01
@@ -25,8 +25,8 @@ n_test = 10000
 
 # Step 1: Read in data
 mnist_folder = 'data/mnist'
-utils.download_mnist(mnist_folder)
-train, val, test = utils.read_mnist(mnist_folder, flatten=True)
+likelihood_utils.download_mnist(mnist_folder)
+train, val, test = likelihood_utils.read_mnist(mnist_folder, flatten=True)
 
 # Step 2: Create datasets and iterator
 train_data = tf.data.Dataset.from_tensor_slices(train)

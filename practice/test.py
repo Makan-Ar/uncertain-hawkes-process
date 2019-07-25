@@ -23,7 +23,7 @@ dt = 0.01
 hawkes_sim.track_intensity(dt)
 hawkes_sim.simulate()
 hawkes_event_times = hawkes_sim.timestamps[0]
-# print(len(hawkes_event_times))
+# print(len(event_times))
 # plot_point_process(hawkes_sim, n_points=5000, t_min=1, max_jumps=200)
 # plt.show()
 
@@ -73,14 +73,14 @@ alpha_test = 0.9
 # for i in [10, 2, 1.7,  1.5, 0.9, 0.5, 0.1]:
 #     ti = time.time()
 #     print(i)
-#     res = hawkes_log_likelihood(hawkes_event_times, _intensity, i, _beta)
+#     res = hawkes_log_likelihood(event_times, _intensity, i, _beta)
 #     j = time.time() - ti
 #     print(res)
 
 # print()
 # result = []
 # for i in np.arange(0, 12, 0.1):
-#     result.append(hawkes_log_likelihood(hawkes_event_times, _intensity, i, _beta))
+#     result.append(hawkes_log_likelihood(event_times, _intensity, i, _beta))
 #     print(i, end='\r')
 #
 # print()
