@@ -1,6 +1,6 @@
 import sys
 import numpy as np
-from scipy.stats import expon, bernoulli
+from scipy.stats import expon, bernoulli, binom
 from hawkes_uncertain_simulator import HawkesUncertainModel
 
 
@@ -165,7 +165,7 @@ def z_posterior_log_prob_type_2(z, event_times, event_marks, z_prior,
     """
     Returns log prob as the sum of each individual log prob. Not normalized.
 
-    ln p(Z) + ln p(mark/exp) + ln prob hawkes + ln prob poisson. This is not normalized, since the denominator is
+    ln p(Z/bernoulli) + ln p(mark/exp) + ln prob hawkes + ln prob poisson. This is not normalized, since the denominator is
     intractable.
 
     :param z: list of boolean. The list of all z_i's. True is noise, False is Hawkes.
@@ -180,7 +180,8 @@ def z_posterior_log_prob_type_2(z, event_times, event_marks, z_prior,
     z_poisson = z
     z_hawkes = np.logical_not(z)
 
-    z_log_prob = np.sum(bernoulli.logpmf(z, p=z_prior))
+    # z_log_prob = np.sum(bernoulli.logpmf(z, p=z_prior))
+    z_log_prob = binom.logpmf(np.sum(z_poisson), len(z_poisson), z_prior)
 
     mark_hawkes_log_prob = np.sum(expon.logpdf(event_marks[z_hawkes], scale=1./hawkes_mark_exp_rate))
     mark_noise_log_prob = np.sum(expon.logpdf(event_marks[z_poisson], scale=1./noise_mark_exp_rate))
@@ -198,7 +199,7 @@ def z_posterior_log_prob_type_2(z, event_times, event_marks, z_prior,
 
 
 if __name__ == "__main__":
-    _h_intensity = 0.2
+    _h_intensity = 0.9
     _h_beta = 2
     _h_alpha = 1.2
 
@@ -219,7 +220,8 @@ if __name__ == "__main__":
     sim_true_labels = hum.mixed_labels.astype(np.bool)
     sim_true_z_prior = hum.noise_percentage
     print(hum.noise_percentage)
-    
+    hum.plot_hawkes_uncertain()
+
     print("true labels:", z_posterior_log_prob(sim_true_labels,
                                                sim_event_times, sim_event_marks, sim_true_z_prior,
                                                (_h_intensity, _h_alpha, _h_beta),
