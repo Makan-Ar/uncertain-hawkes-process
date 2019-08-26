@@ -87,6 +87,8 @@ def z_i_posterior_prob(event_time, event_mark, event_times_hist, z_hist, z_prior
 
     poisson_prob_noise = np.exp(poisson_log_likelihood_numpy(np.sum(z_hist) + 1, poisson_lambda, event_time))
     poisson_prob_hawkes = np.exp(poisson_log_likelihood_numpy(np.sum(z_hist), poisson_lambda, event_time))
+    # poisson_prob_noise = 1
+    # poisson_prob_hawkes = 1
 
     numerator = z_prior * mark_prob_noise * hawkes_prob_noise * poisson_prob_noise
     normalizer = ((1 - z_prior) * mark_prob_hawkes * hawkes_prob_hawkes * poisson_prob_hawkes) + numerator
@@ -130,7 +132,7 @@ def z_posterior_prob(z, event_times, event_marks, z_prior,
     for i in range(0, len(event_times)):
         z_i_probs[i] = z_i_posterior_prob(event_times[i], event_marks[i], event_times[:i], z[:i], z_prior,
                                           hawkes_params, poisson_lambda, hawkes_mark_exp_rate, noise_mark_exp_rate,
-                                          return_prob_z_i_noise=z[i] == 1)
+                                          return_prob_z_i_noise=False)
         print(i, event_times[i], z[i], z_i_probs[i])
     return np.prod(z_i_probs)
 
@@ -159,14 +161,13 @@ def z_posterior_log_prob(z, event_times, event_marks, z_prior,
     return np.sum(z_i_probs)
 
 
-def z_posterior_log_prob_type_2(z, event_times, event_marks, z_prior,
-                                hawkes_params, poisson_lambda,
-                                hawkes_mark_exp_rate, noise_mark_exp_rate):
+def complete_data_log_likelihood(z, event_times, event_marks, z_prior,
+                                 hawkes_params, poisson_lambda,
+                                 hawkes_mark_exp_rate, noise_mark_exp_rate):
     """
-    Returns log prob as the sum of each individual log prob. Not normalized.
+    Returns the complete data log-likelihood for univariate uncertain Hawkes model as derived in the likelihood doc.
 
-    ln p(Z/bernoulli) + ln p(mark/exp) + ln prob hawkes + ln prob poisson. This is not normalized, since the denominator is
-    intractable.
+    ln p(Z/binom) + ln p(mark/exp) + ln prob hawkes + ln prob poisson.
 
     :param z: list of boolean. The list of all z_i's. True is noise, False is Hawkes.
     :param event_times: list of all event times
@@ -180,7 +181,6 @@ def z_posterior_log_prob_type_2(z, event_times, event_marks, z_prior,
     z_poisson = z
     z_hawkes = np.logical_not(z)
 
-    # z_log_prob = np.sum(bernoulli.logpmf(z, p=z_prior))
     z_log_prob = binom.logpmf(np.sum(z_poisson), len(z_poisson), z_prior)
 
     mark_hawkes_log_prob = np.sum(expon.logpdf(event_marks[z_hawkes], scale=1./hawkes_mark_exp_rate))
@@ -198,16 +198,92 @@ def z_posterior_log_prob_type_2(z, event_times, event_marks, z_prior,
             poisson_log_prob)
 
 
+def print_complete_data_log_likelihood(z, event_times, event_marks, z_prior,
+                                       hawkes_params, poisson_lambda,
+                                       hawkes_mark_exp_rate, noise_mark_exp_rate):
+    # prints the probability of the last event in a sequence of events to be Hawkes rather than Poisson.
+
+    for i in range(len(event_times)):
+        z_noise_temp = np.append(z[:i], True)
+        z_hawkes_temp = np.append(z[:i], False)
+
+        log_prob_noise = complete_data_log_likelihood(z_noise_temp, event_times[:i + 1], event_marks[:i + 1], z_prior,
+                                                      hawkes_params, poisson_lambda,
+                                                      hawkes_mark_exp_rate, noise_mark_exp_rate)
+
+        log_prob_hawkes = complete_data_log_likelihood(z_hawkes_temp, event_times[:i + 1], event_marks[:i + 1], z_prior,
+                                                       hawkes_params, poisson_lambda,
+                                                       hawkes_mark_exp_rate, noise_mark_exp_rate)
+
+        print(i, event_times[i], z[i], log_prob_hawkes / (log_prob_hawkes + log_prob_noise))
+
+
+def complete_data_log_likelihood_hawkes_only(z, event_times, event_marks, z_prior,
+                                             hawkes_params,
+                                             hawkes_mark_exp_rate, noise_mark_exp_rate):
+    """
+    Returns log prob as the sum of each individual log prob. Not normalized.
+    Ignore the prob of poisson.
+
+    ln p(Z/bernoulli) + ln p(mark/exp) + ln prob hawkes. This is not normalized, since the denominator is intractable.
+
+    :param z: list of boolean. The list of all z_i's. True is noise, False is Hawkes.
+    :param event_times: list of all event times
+    :param event_marks: list of all event marks
+    :param z_prior: prior probability of latent variable Z=1 (prior probability of noise)
+    :param hawkes_params: a tuple of hawkes parameters (lambda, alpha, beta)
+    :param hawkes_mark_exp_rate: lambda parameter of the exponential dist for the marks of the Hawkes process events.
+    :param noise_mark_exp_rate: lambda parameter of the exponential dist for the marks of the noise events.
+    """
+    z_poisson = z
+    z_hawkes = np.logical_not(z)
+
+    z_log_prob = binom.logpmf(np.sum(z_poisson), len(z_poisson), z_prior)
+
+    mark_hawkes_log_prob = np.sum(expon.logpdf(event_marks[z_hawkes], scale=1./hawkes_mark_exp_rate))
+    mark_noise_log_prob = np.sum(expon.logpdf(event_marks[z_poisson], scale=1./noise_mark_exp_rate))
+
+    hawkes_log_prob = hawkes_log_likelihood_numpy(event_times[z_hawkes],
+                                                  hawkes_params[0], hawkes_params[1], hawkes_params[2],
+                                                  event_times[-1])
+
+    return (z_log_prob +
+            mark_hawkes_log_prob +
+            mark_noise_log_prob +
+            hawkes_log_prob)
+
+
+def print_complete_data_log_likelihood_hawkes_only(z, event_times, event_marks, z_prior,
+                                                   hawkes_params,
+                                                   hawkes_mark_exp_rate, noise_mark_exp_rate):
+    for i in range(len(event_times)):
+        z_noise_temp = np.append(z[:i], True)
+        z_hawkes_temp = np.append(z[:i], False)
+
+        log_prob_noise = complete_data_log_likelihood_hawkes_only(z_noise_temp, event_times[:i + 1],
+                                                                  event_marks[:i + 1], z_prior,
+                                                                  hawkes_params,
+                                                                  hawkes_mark_exp_rate, noise_mark_exp_rate)
+
+        log_prob_hawkes = complete_data_log_likelihood_hawkes_only(z_hawkes_temp, event_times[:i + 1],
+                                                                   event_marks[:i + 1], z_prior,
+                                                                   hawkes_params,
+                                                                   hawkes_mark_exp_rate, noise_mark_exp_rate)
+
+        print(i, event_times[i], z[i], log_prob_hawkes / (log_prob_hawkes + log_prob_noise))
+        # print(i, event_times[i], z[i], log_prob_hawkes, log_prob_noise)
+
+
 if __name__ == "__main__":
     _h_intensity = 0.9
     _h_beta = 2
     _h_alpha = 1.2
 
-    _runtime = 50
+    _runtime = 30
 
-    _p_intensity = 0.1
+    _p_intensity = 0.2
 
-    _h_exp_rate = 1.5
+    _h_exp_rate = 2.5
     _p_exp_rate = 1.5
 
     hum = HawkesUncertainModel(h_lambda=_h_intensity, h_alpha=_h_alpha, h_beta=_h_beta, h_exp_rate=_h_exp_rate,
@@ -221,6 +297,12 @@ if __name__ == "__main__":
     sim_true_z_prior = hum.noise_percentage
     print(hum.noise_percentage)
     hum.plot_hawkes_uncertain()
+
+    print("Type 1")
+    z_posterior_prob(sim_true_labels,
+                     sim_event_times, sim_event_marks, sim_true_z_prior,
+                     (_h_intensity, _h_alpha, _h_beta),
+                     _p_intensity, _h_exp_rate, _p_exp_rate)
 
     print("true labels:", z_posterior_log_prob(sim_true_labels,
                                                sim_event_times, sim_event_marks, sim_true_z_prior,
@@ -242,23 +324,54 @@ if __name__ == "__main__":
                                                  (_h_intensity, _h_alpha, _h_beta),
                                                  _p_intensity, _h_exp_rate, _p_exp_rate))
 
-    print("Type 2")
-    print("true labels:", z_posterior_log_prob_type_2(sim_true_labels,
-                                                      sim_event_times, sim_event_marks, sim_true_z_prior,
-                                                      (_h_intensity, _h_alpha, _h_beta),
-                                                      _p_intensity, _h_exp_rate, _p_exp_rate))
+    print("Compete Data Log-likelihood")
+    print_complete_data_log_likelihood(sim_true_labels,
+                                       sim_event_times, sim_event_marks, sim_true_z_prior,
+                                       (_h_intensity, _h_alpha, _h_beta),
+                                       _p_intensity, _h_exp_rate, _p_exp_rate)
 
-    print("all hawkes", z_posterior_log_prob_type_2(np.zeros(len(sim_true_labels)).astype(np.bool),
+    print("true labels:", complete_data_log_likelihood(sim_true_labels,
+                                                       sim_event_times, sim_event_marks, sim_true_z_prior,
+                                                       (_h_intensity, _h_alpha, _h_beta),
+                                                       _p_intensity, _h_exp_rate, _p_exp_rate))
+
+    print("all hawkes", complete_data_log_likelihood(np.zeros(len(sim_true_labels)).astype(np.bool),
+                                                     sim_event_times, sim_event_marks, sim_true_z_prior,
+                                                     (_h_intensity, _h_alpha, _h_beta),
+                                                     _p_intensity, _h_exp_rate, _p_exp_rate))
+
+    print("all noise", complete_data_log_likelihood(np.ones(len(sim_true_labels)).astype(np.bool),
                                                     sim_event_times, sim_event_marks, sim_true_z_prior,
                                                     (_h_intensity, _h_alpha, _h_beta),
                                                     _p_intensity, _h_exp_rate, _p_exp_rate))
 
-    print("all noise", z_posterior_log_prob_type_2(np.ones(len(sim_true_labels)).astype(np.bool),
+    print("exact opposite", complete_data_log_likelihood(np.logical_not(sim_true_labels),
+                                                         sim_event_times, sim_event_marks, sim_true_z_prior,
+                                                         (_h_intensity, _h_alpha, _h_beta),
+                                                         _p_intensity, _h_exp_rate, _p_exp_rate))
+
+    print("Complete Data Log-likelihood Poisson")
+    print_complete_data_log_likelihood_hawkes_only(sim_true_labels,
                                                    sim_event_times, sim_event_marks, sim_true_z_prior,
                                                    (_h_intensity, _h_alpha, _h_beta),
-                                                   _p_intensity, _h_exp_rate, _p_exp_rate))
+                                                   _h_exp_rate, _p_exp_rate)
 
-    print("exact opposite", z_posterior_log_prob_type_2(np.logical_not(sim_true_labels),
-                                                        sim_event_times, sim_event_marks, sim_true_z_prior,
-                                                        (_h_intensity, _h_alpha, _h_beta),
-                                                        _p_intensity, _h_exp_rate, _p_exp_rate))
+    print("true labels:", complete_data_log_likelihood_hawkes_only(sim_true_labels,
+                                                                   sim_event_times, sim_event_marks, sim_true_z_prior,
+                                                                   (_h_intensity, _h_alpha, _h_beta),
+                                                                   _h_exp_rate, _p_exp_rate))
+
+    print("all hawkes", complete_data_log_likelihood_hawkes_only(np.zeros(len(sim_true_labels)).astype(np.bool),
+                                                                 sim_event_times, sim_event_marks, sim_true_z_prior,
+                                                                 (_h_intensity, _h_alpha, _h_beta),
+                                                                 _h_exp_rate, _p_exp_rate))
+
+    print("all noise", complete_data_log_likelihood_hawkes_only(np.ones(len(sim_true_labels)).astype(np.bool),
+                                                                sim_event_times, sim_event_marks, sim_true_z_prior,
+                                                                (_h_intensity, _h_alpha, _h_beta),
+                                                                _h_exp_rate, _p_exp_rate))
+
+    print("exact opposite", complete_data_log_likelihood_hawkes_only(np.logical_not(sim_true_labels),
+                                                                     sim_event_times, sim_event_marks, sim_true_z_prior,
+                                                                     (_h_intensity, _h_alpha, _h_beta),
+                                                                     _h_exp_rate, _p_exp_rate))
